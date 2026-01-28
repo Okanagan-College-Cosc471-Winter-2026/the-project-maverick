@@ -46,11 +46,8 @@ The system follows a layered architecture pattern with clear separation of conce
 
 ### Use Cases
 
-![Use Cases](docs/images/use_cases.png)
+![Use Cases](Documentation/Screenshot_2026-01-27_at_7.50.52_PM.png)
 
-### Technology Stack
-
-![Technology Stack](docs/images/tech_stack.png)
 
 ## 🚀 Quick Start
 
@@ -65,7 +62,7 @@ The system follows a layered architecture pattern with clear separation of conce
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-org/stock-prediction-system.git
+git clone https://github.com/your-org/stock-prediction-system](https://github.com/Okanagan-College-Cosc471-Winter-2026/the-project-maverick.git
 cd stock-prediction-system
 
 # 2. Copy and configure environment variables
