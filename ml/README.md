@@ -75,3 +75,13 @@ pytest tests/ml/
 3. **Train model** → `python training/train.py`
 4. **Evaluate** → `python evaluation/evaluate.py`
 5. **Save model** → `models/xgboost_v1.joblib`
+
+```
+  Connection details for your ML code:
+  - Host: localhost
+  - Port: 5432
+  - Database: market_data
+  - User: mluser
+  - Password: mlpassword
+  
+  ```
