@@ -140,7 +140,12 @@ def main():
     
     engine = get_db_engine()
     tables = get_all_tables(engine)
-    print(f"Found {len(tables)} stocks in database.")
+
+    # Filter out known non-stock tables (metadata/test tables)
+    exclude_tables = {'abcde', 'modelfeatures', 'sectors', 'stock_metadata'} 
+    tables = [t for t in tables if t not in exclude_tables]
+    
+    print(f"Found {len(tables)} stocks in database (filtered metadata tables).")
     
     # 1. Data Ingestion & Processing
     all_X = []
@@ -210,23 +215,23 @@ def main():
     # 3. XGBoost Model Training
     print("Initializing XGBoost...")
     model = XGBRegressor(
-        n_estimators=500,
-        learning_rate=0.05,
+        n_estimators=1000,        # Increased from 500
+        learning_rate=0.01,       # Reduced from 0.05 (slower learning = more trees)
         max_depth=8,
         subsample=0.8,
         colsample_bytree=0.8,
-        n_jobs=N_JOBS,           # 28 Cores
-        tree_method='hist',      # Faster histogram optimization
+        n_jobs=N_JOBS,            # 28 Cores
+        tree_method='hist',       # Faster histogram optimization
         objective='reg:squarederror',
-        random_state=42
+        random_state=42,
+        early_stopping_rounds=50  # Increased patience from 20
     )
     
     print("Training model (this may take a while)...")
     model.fit(
         X_train, y_train,
         eval_set=[(X_test, y_test)],
-        verbose=50,
-        early_stopping_rounds=20
+        verbose=50
     )
     
     # 4. Evaluation
