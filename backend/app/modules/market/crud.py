@@ -12,11 +12,7 @@ from app.modules.market.models import DailyPrice, Stock
 
 def get_active_stocks(session: Session) -> list[Stock]:
     """Return all active stocks, ordered by symbol."""
-    stmt = (
-        select(Stock)
-        .where(Stock.is_active.is_(True))
-        .order_by(Stock.symbol)
-    )
+    stmt = select(Stock).where(Stock.is_active.is_(True)).order_by(Stock.symbol)
     return list(session.scalars(stmt).all())
 
 

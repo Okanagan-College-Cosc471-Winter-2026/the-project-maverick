@@ -1,4 +1,3 @@
-import secrets
 import warnings
 from typing import Annotated, Any, Literal
 
@@ -81,7 +80,6 @@ class Settings(BaseSettings):
             self.EMAILS_FROM_NAME = self.PROJECT_NAME
         return self
 
-    
     # Auth removed
 
     def _check_default_secret(self, var_name: str, value: str | None) -> None:

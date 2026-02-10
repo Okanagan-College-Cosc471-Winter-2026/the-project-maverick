@@ -52,9 +52,7 @@ class DailyPrice(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    symbol: Mapped[str] = mapped_column(
-        ForeignKey("market.stocks.symbol"), index=True
-    )
+    symbol: Mapped[str] = mapped_column(ForeignKey("market.stocks.symbol"), index=True)
     date: Mapped[date_type] = mapped_column(index=True)
     open: Mapped[float]
     high: Mapped[float]

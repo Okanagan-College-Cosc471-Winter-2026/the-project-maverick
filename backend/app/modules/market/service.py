@@ -5,7 +5,7 @@ Converts DB rows into chart-friendly response shapes.
 """
 
 import calendar
-from datetime import date, timedelta, timezone
+from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -50,9 +50,7 @@ class MarketService:
 
         return [
             OHLCRead(
-                time=int(
-                    calendar.timegm(r.date.timetuple())
-                ),
+                time=int(calendar.timegm(r.date.timetuple())),
                 open=r.open,
                 high=r.high,
                 low=r.low,

@@ -1,4 +1,2 @@
-from sqlmodel import SQLModel
-
-# Placeholder for shared models if any. 
+# Placeholder for shared models if any.
 # Currently Market and Inference modules handle their own data structures.
