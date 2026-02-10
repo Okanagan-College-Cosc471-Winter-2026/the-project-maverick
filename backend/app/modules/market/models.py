@@ -1,18 +1,16 @@
 from datetime import datetime
+from sqlalchemy.orm import Mapped, mapped_column
+from app.core.db import Base
 
-from sqlmodel import Field, SQLModel
-
-
-class Candle(SQLModel, table=True):
+class Candle(Base):
     __tablename__ = "candles"
-    __table_args__ = ({"schema": "market"},)
+    __table_args__ = {"schema": "market"}
 
-    id: int | None = Field(default=None, primary_key=True)
-    symbol: str = Field(index=True, max_length=10)
-    ts: datetime = Field(index=True)
-    close: float
-    volume: int
-
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    symbol: Mapped[str] = mapped_column(index=True)
+    ts: Mapped[datetime] = mapped_column(index=True)
+    close: Mapped[float]
+    volume: Mapped[int]
 
 # Tickers the system supports — used by seed, API validation, and inference
 SUPPORTED_TICKERS: list[str] = ["AAPL", "MSFT", "GOOGL"]

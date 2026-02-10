@@ -8,9 +8,9 @@ jinja2>=3.1.4,<4.0.0
 alembic>=1.12.1,<2.0.0
 httpx>=0.25.1,<1.0.0
 psycopg[binary]>=3.1.13,<4.0.0
-sqlmodel>=0.0.21,<1.0.0
+# sqlmodel removed
 pydantic-settings>=2.2.1,<3.0.0
 sentry-sdk[fastapi]>=1.40.6,<2.0.0
-pyjwt>=2.8.0,<3.0.0
-pwdlib[argon2,bcrypt]>=0.3.0
+# pyjwt removed
+# pwdlib removed
 uvicorn

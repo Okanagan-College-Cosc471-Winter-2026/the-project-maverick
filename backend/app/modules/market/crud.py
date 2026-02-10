@@ -1,15 +1,13 @@
 from datetime import datetime
-
-from sqlmodel import Session, select
-
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from app.modules.market.models import Candle
 
-
 def get_candles(
-    session: Session,
-    symbol: str,
-    start: datetime,
-    end: datetime,
+    session: Session, 
+    symbol: str, 
+    start: datetime, 
+    end: datetime
 ) -> list[Candle]:
     statement = (
         select(Candle)
@@ -18,4 +16,4 @@ def get_candles(
         .where(Candle.ts <= end)
         .order_by(Candle.ts)
     )
-    return session.exec(statement).all()
+    return session.scalars(statement).all()
