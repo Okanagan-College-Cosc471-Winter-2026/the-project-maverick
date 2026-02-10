@@ -324,21 +324,32 @@ ws.onmessage = (event) => {
 
 ### Backend Development
 
+The backend uses [uv](https://docs.astral.sh/uv/) for fast dependency management. Install it first:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Then set up and run the backend:
+
 ```bash
 cd backend
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (creates .venv automatically)
+uv sync
 
 # Run database migrations
-alembic upgrade head
+uv run alembic upgrade head
 
 # Start development server with auto-reload
-uvicorn app.main:app --reload --port 8000
+uv run fastapi dev app/main.py
+```
+
+You can also activate the virtual environment manually if you prefer:
+
+```bash
+source .venv/bin/activate
+fastapi dev app/main.py
 ```
 
 ### Frontend Development
@@ -433,7 +444,7 @@ See `docs/DEPLOYMENT.md` for detailed instructions.
 ```bash
 # Backend tests
 cd backend
-pytest tests/ -v
+uv run pytest tests/ -v
 
 # Frontend tests
 cd frontend
