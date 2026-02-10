@@ -1,5 +1,7 @@
 FROM python:3.12-slim
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 WORKDIR /app
 
 # Install system dependencies
@@ -9,7 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python ML dependencies
 COPY ml/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system --no-cache-dir -r requirements.txt
 
 # Copy ML code
 COPY ml/ ./ml/
