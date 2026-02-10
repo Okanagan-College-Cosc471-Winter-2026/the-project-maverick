@@ -1,22 +1,34 @@
-from datetime import datetime
+"""
+Market module API schemas.
+
+Response shapes are designed to be consumed directly by
+TradingView Lightweight Charts on the frontend.
+"""
 
 from pydantic import BaseModel
 
 
-class CandleRead(BaseModel):
-    symbol: str
-    ts: datetime
-    close: float
-    volume: int
+class StockRead(BaseModel):
+    """Stock metadata for the stock selector dropdown."""
 
-
-class StockInfo(BaseModel):
     symbol: str
     name: str
+    sector: str | None = None
+    industry: str | None = None
+    exchange: str | None = None
 
 
-STOCK_DIRECTORY: dict[str, str] = {
-    "AAPL": "Apple Inc.",
-    "MSFT": "Microsoft Corp.",
-    "GOOGL": "Alphabet Inc.",
-}
+class OHLCRead(BaseModel):
+    """
+    Single daily OHLC bar for chart rendering.
+
+    ``time`` is a Unix timestamp (seconds) matching the format
+    that TradingView Lightweight Charts expects natively.
+    """
+
+    time: int
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int

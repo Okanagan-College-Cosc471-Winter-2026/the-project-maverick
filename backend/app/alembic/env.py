@@ -20,7 +20,7 @@ fileConfig(config.config_file_name)
 
 from app.core.config import settings # noqa
 from app.core.db import Base # noqa
-from app.modules.market.models import Candle # noqa
+from app.modules.market.models import Stock, DailyPrice # noqa
 
 target_metadata = Base.metadata
 
