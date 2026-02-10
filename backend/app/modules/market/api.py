@@ -15,7 +15,7 @@ router = APIRouter(prefix="/market", tags=["market"])
 
 
 @router.get("/stocks", response_model=list[StockRead])
-def list_stocks(session: SessionDep):
+def list_stocks(session: SessionDep) -> list[StockRead]:
     """
     List all active stocks.
 
@@ -26,7 +26,7 @@ def list_stocks(session: SessionDep):
 
 
 @router.get("/stocks/{symbol}", response_model=StockRead)
-def get_stock(symbol: str, session: SessionDep):
+def get_stock(symbol: str, session: SessionDep) -> StockRead:
     """
     Get metadata for a single stock.
     """
@@ -47,7 +47,7 @@ def get_ohlc(
     symbol: str,
     days: int = 365,
     session: SessionDep = None,  # type: ignore[assignment]
-):
+) -> list[OHLCRead]:
     """
     Get daily OHLC + volume data for a stock.
 

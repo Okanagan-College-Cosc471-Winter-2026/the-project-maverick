@@ -26,7 +26,7 @@ HORIZON_HOURS: dict[str, int] = {"1h": 1, "4h": 4, "1d": 24, "1w": 168}
 
 
 @router.post("/predict", response_model=PredictionResponse)
-def predict(request: PredictionRequest):
+def predict(request: PredictionRequest) -> PredictionResponse:
     """
     Get prediction for a stock.
     """

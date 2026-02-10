@@ -31,7 +31,6 @@ class Settings(BaseSettings):
         extra="ignore",
     )
     API_V1_STR: str = "/api/v1"
-    API_V1_STR: str = "/api/v1"
     # SECRET_KEY and Tokens removed
     FRONTEND_HOST: str = "http://localhost:5173"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
