@@ -20,6 +20,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Copy application code
 COPY backend/app /app/app
 COPY backend/scripts /app/scripts
+COPY backend/alembic.ini /app/alembic.ini
 
 # Set python path
 ENV PYTHONPATH=/app
