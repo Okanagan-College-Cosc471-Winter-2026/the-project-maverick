@@ -109,27 +109,41 @@ export function PredictionForm({ symbol }: PredictionFormProps) {
           <CardContent>
             <dl className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <dt className="text-muted-foreground">Predicted Price</dt>
+                <dt className="text-muted-foreground">Current Price</dt>
                 <dd className="text-2xl font-bold font-mono">
-                  ${result.prediction.toFixed(2)}
+                  ${result.current_price.toFixed(2)}
                 </dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Confidence</dt>
+                <dt className="text-muted-foreground">Predicted Price (60d)</dt>
                 <dd className="text-2xl font-bold font-mono">
-                  {(result.confidence * 100).toFixed(1)}%
+                  ${result.predicted_price.toFixed(2)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Expected Return</dt>
+                <dd className={`text-2xl font-bold font-mono ${result.predicted_return >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {result.predicted_return >= 0 ? '+' : ''}{result.predicted_return.toFixed(2)}%
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Prediction Date</dt>
+                <dd className="font-mono">
+                  {new Date(result.prediction_date).toLocaleDateString()}
                 </dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Model Version</dt>
-                <dd className="font-mono">{result.model_version}</dd>
+                <dd className="font-mono text-xs">{result.model_version}</dd>
               </div>
-              <div>
-                <dt className="text-muted-foreground">Predicted At</dt>
-                <dd className="font-mono">
-                  {new Date(result.predicted_at).toLocaleString()}
-                </dd>
-              </div>
+              {result.confidence !== null && (
+                <div>
+                  <dt className="text-muted-foreground">Confidence</dt>
+                  <dd className="text-2xl font-bold font-mono">
+                    {(result.confidence * 100).toFixed(1)}%
+                  </dd>
+                </div>
+              )}
             </dl>
           </CardContent>
         </Card>

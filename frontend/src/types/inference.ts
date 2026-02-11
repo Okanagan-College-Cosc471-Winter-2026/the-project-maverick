@@ -8,9 +8,10 @@ export interface PredictionRequest {
 
 export interface PredictionResponse {
   symbol: string
-  prediction: number
-  confidence: number
+  current_price: number
+  predicted_price: number
+  predicted_return: number
+  prediction_date: string
+  confidence: number | null
   model_version: string
-  predicted_at: string
-  prediction_target_time: number
 }

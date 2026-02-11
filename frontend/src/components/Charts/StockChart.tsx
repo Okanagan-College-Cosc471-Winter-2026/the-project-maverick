@@ -1,8 +1,13 @@
-import { createChart, ColorType, IChartApi, CandlestickSeries } from 'lightweight-charts';
+import { createChart, ColorType, IChartApi, CandlestickSeries, LineSeries } from 'lightweight-charts';
 import { useEffect, useRef } from 'react';
+
+export type ChartType = 'candlestick' | 'line';
 
 export const StockChart = (props: {
     data: { time: string; open: number; high: number; low: number; close: number }[];
+    chartType?: ChartType;
+    predictionPrice?: number;
+    predictionDate?: string;
     colors?: {
         backgroundColor?: string;
         lineColor?: string;
@@ -13,6 +18,9 @@ export const StockChart = (props: {
 }) => {
     const {
         data,
+        chartType = 'candlestick',
+        predictionPrice,
+        predictionDate,
         colors: {
             backgroundColor = 'transparent',
             lineColor = '#2962FF',
@@ -49,17 +57,26 @@ export const StockChart = (props: {
 
         chart.timeScale().fitContent();
 
-        const newSeries = chart.addSeries(CandlestickSeries, {
-            upColor: '#26a69a',
-            downColor: '#ef5350',
-            borderVisible: false,
-            wickUpColor: '#26a69a',
-            wickDownColor: '#ef5350'
-        });
+        if (chartType === 'candlestick') {
+            const candlestickSeries = chart.addSeries(CandlestickSeries, {
+                upColor: '#26a69a',
+                downColor: '#ef5350',
+                borderVisible: false,
+                wickUpColor: '#26a69a',
+                wickDownColor: '#ef5350'
+            });
 
-        // Convert dates to time if needed, assuming API returns correct format (Unix timestamp or YYYY-MM-DD)
-        // usage: data.map(d => ({ ...d, time: d.time as Time }))
-        newSeries.setData(data as any);
+            candlestickSeries.setData(data as any);
+        } else {
+            const lineSeries = chart.addSeries(LineSeries, {
+                color: lineColor,
+                lineWidth: 2,
+            });
+
+            // Convert OHLC to line data (using close prices)
+            const lineData = data.map(d => ({ time: d.time as any, value: d.close }));
+            lineSeries.setData(lineData);
+        }
 
         window.addEventListener('resize', handleResize);
 
@@ -67,7 +84,7 @@ export const StockChart = (props: {
             window.removeEventListener('resize', handleResize);
             chart.remove();
         };
-    }, [data, backgroundColor, lineColor, textColor, areaTopColor, areaBottomColor]);
+    }, [data, chartType, predictionPrice, predictionDate, backgroundColor, lineColor, textColor, areaTopColor, areaBottomColor]);
 
     return (
         <div

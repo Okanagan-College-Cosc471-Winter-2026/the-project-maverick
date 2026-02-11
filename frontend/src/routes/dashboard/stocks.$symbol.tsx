@@ -1,6 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, BarChart3, LineChart } from "lucide-react"
 import { Suspense, useState } from "react"
 import { PredictionForm } from "@/components/Stocks/PredictionForm"
 import { Badge } from "@/components/ui/badge"
@@ -9,9 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ohlcQueryOptions, stockQueryOptions } from "@/hooks/useMarket"
-import { StockChart } from "@/components/Charts/StockChart"
+import { StockChart, ChartType } from "@/components/Charts/StockChart"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import { InferenceService } from "@/services"
 
 export const Route = createFileRoute("/dashboard/stocks/$symbol")({
   component: StockDetail,
@@ -54,6 +55,9 @@ function ChartTab({ symbol }: { symbol: string }) {
   const { data: ohlc } = useSuspenseQuery(ohlcQueryOptions(symbol))
   const { data: stock } = useSuspenseQuery(stockQueryOptions(symbol))
   const [showPrediction, setShowPrediction] = useState(false)
+  const [chartType, setChartType] = useState<ChartType>('candlestick')
+  const [prediction, setPrediction] = useState<any>(null)
+  const [loadingPrediction, setLoadingPrediction] = useState(false)
 
   // Prepare data for chart
   const chartData = ohlc.map((item) => ({
@@ -68,6 +72,23 @@ function ChartTab({ symbol }: { symbol: string }) {
   const previousPrice = ohlc[ohlc.length - 2]?.close || 0
   const priceChange = lastPrice - previousPrice
   const priceChangePercent = (priceChange / previousPrice) * 100
+
+  // Load prediction when toggle is enabled
+  const handlePredictionToggle = async (checked: boolean) => {
+    setShowPrediction(checked)
+    if (checked && !prediction) {
+      setLoadingPrediction(true)
+      try {
+        const result = await InferenceService.predictStock(symbol)
+        setPrediction(result)
+      } catch (error) {
+        console.error('Failed to load prediction:', error)
+        setShowPrediction(false)
+      } finally {
+        setLoadingPrediction(false)
+      }
+    }
+  }
 
   return (
     <Card>
@@ -89,6 +110,19 @@ function ChartTab({ symbol }: { symbol: string }) {
               </div>
             </div>
 
+            {showPrediction && prediction && (
+              <>
+                <div className="h-10 w-px bg-border" />
+                <div className="text-right">
+                  <div className="text-xs text-muted-foreground">Predicted (60d)</div>
+                  <div className="text-lg font-bold">${prediction.predicted_price.toFixed(2)}</div>
+                  <div className={`text-xs ${prediction.predicted_return >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {prediction.predicted_return >= 0 ? '+' : ''}{prediction.predicted_return.toFixed(2)}%
+                  </div>
+                </div>
+              </>
+            )}
+
             <div className="h-10 w-px bg-border" />
 
             <div className="text-right">
@@ -99,23 +133,46 @@ function ChartTab({ symbol }: { symbol: string }) {
 
             <div className="h-10 w-px bg-border" />
 
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="prediction-mode"
-                checked={showPrediction}
-                onCheckedChange={setShowPrediction}
-                disabled={true}
-              />
-              <Label htmlFor="prediction-mode" className="text-xs whitespace-nowrap">
-                Show Prediction
-              </Label>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={chartType === 'candlestick' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setChartType('candlestick')}
+                >
+                  <BarChart3 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={chartType === 'line' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setChartType('line')}
+                >
+                  <LineChart className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="prediction-mode"
+                  checked={showPrediction}
+                  onCheckedChange={handlePredictionToggle}
+                  disabled={loadingPrediction}
+                />
+                <Label htmlFor="prediction-mode" className="text-xs whitespace-nowrap">
+                  {loadingPrediction ? 'Loading...' : 'Show Prediction'}
+                </Label>
+              </div>
             </div>
           </div>
         </div>
       </CardHeader>
       <CardContent className="pl-2">
         <div className="h-[500px] w-full">
-          <StockChart data={chartData} />
+          <StockChart
+            data={chartData}
+            chartType={chartType}
+            predictionPrice={showPrediction && prediction ? prediction.predicted_price : undefined}
+            predictionDate={showPrediction && prediction ? prediction.prediction_date : undefined}
+          />
         </div>
       </CardContent>
     </Card>
