@@ -1,49 +1,24 @@
-import pandas as pd
+#!/usr/bin/env python3
 from sqlalchemy import create_engine, text
 
-# Database configuration (matching the notebook)
-DB_CONFIG = {
-    'host': 'localhost',
-    'port': 5432,
-    'database': 'market_data',
-    'user': 'mluser',
-    'password': 'mlpassword'
-}
+engine = create_engine('postgresql://mluser:mlpassword@localhost:5432/market_data')
 
-def check_db():
-    connection_string = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
-    try:
-        engine = create_engine(connection_string)
-        with engine.connect() as conn:
-            print("Successfully connected to the database!")
-            
-            # Check for tables in 'market' schema
-            query = """
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'market' 
-            ORDER BY table_name
-            LIMIT 5
-            """
-            tables = pd.read_sql(query, conn)
-            print(f"\nFound {len(tables)} tables (showing first few):")
-            print(tables)
-            
-            if not tables.empty:
-                # Check row count for one table (e.g., first one found or 'aapl' if it exists)
-                table_to_check = 'aapl' if 'aapl' in tables['table_name'].values else tables['table_name'].iloc[0]
-                print(f"\nChecking row count for table: {table_to_check}")
-                count_query = text(f'SELECT count(*) FROM market."{table_to_check}"')
-                count = conn.execute(count_query).scalar()
-                print(f"Row count: {count}")
-
-                # Check date range
-                date_query = text(f'SELECT min(date), max(date) FROM market."{table_to_check}"')
-                min_date, max_date = conn.execute(date_query).fetchone()
-                print(f"Date range: {min_date} to {max_date}")
-
-    except Exception as e:
-        print(f"Error connecting to database: {e}")
-
-if __name__ == "__main__":
-    check_db()
+with engine.connect() as conn:
+    # Check tables
+    result = conn.execute(text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'market'"))
+    tables = [row[0] for row in result]
+    print(f"Tables in market schema: {tables}")
+    
+    # Check stocks
+    result = conn.execute(text("SELECT symbol, name FROM market.stocks LIMIT 5"))
+    print("\nSample stocks:")
+    for row in result:
+        print(f"  {row[0]}: {row[1]}")
+    
+    # Check data volume
+    result = conn.execute(text("SELECT COUNT(*) as total, COUNT(DISTINCT symbol) as stocks, MIN(date)::text as earliest, MAX(date)::text as latest FROM market.daily_prices"))
+    row = result.fetchone()
+    print(f"\nData statistics:")
+    print(f"  Total records: {row[0]}")
+    print(f"  Number of stocks: {row[1]}")
+    print(f"  Date range: {row[2]} to {row[3]}")
