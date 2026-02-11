@@ -40,7 +40,4 @@ def predict_stock_price(symbol: str, session: SessionDep) -> PredictionResponse:
             raise HTTPException(status_code=400, detail=error_msg)
     except Exception as e:
         # Model loading or prediction error
-        raise HTTPException(
-            status_code=500,
-            detail=f"Prediction error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")

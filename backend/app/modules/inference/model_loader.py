@@ -75,7 +75,9 @@ class ModelManager:
         logger.info(f"  - Version: {self._metadata.get('version')}")
         logger.info(f"  - Training date: {self._metadata.get('training_date')}")
         if self._ticker_encoder is not None:
-            logger.info(f"  - Ticker encoder loaded with {len(self._ticker_encoder.classes_)} symbols")
+            logger.info(
+                f"  - Ticker encoder loaded with {len(self._ticker_encoder.classes_)} symbols"
+            )
 
     @property
     def model(self) -> XGBRegressor:

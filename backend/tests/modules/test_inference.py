@@ -9,6 +9,7 @@ def test_predict_stock_price(client: TestClient) -> None:
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
+
 def test_predict_stock_price_success_mock(client: TestClient) -> None:
     # To truly test success without DB seeding, we'd need to mock the service
     # For now, ensuring the route exists (getting 404 instead of 405/422) is a good first step

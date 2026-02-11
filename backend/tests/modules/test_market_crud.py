@@ -15,15 +15,18 @@ def test_get_active_stocks_ordered(db: Session, market_data):  # noqa: ARG001
     assert "INACT" not in symbols
     assert "AAPL" in symbols
 
+
 def test_get_stock_returns_none_for_missing(db: Session):
     stock = crud.get_stock(db, "NONEXISTENT")
     assert stock is None
+
 
 def test_get_stock_uppercases_symbol(db: Session, market_data):  # noqa: ARG001
     # Pass lowercase, expect match
     stock = crud.get_stock(db, "aapl")
     assert stock is not None
     assert stock.symbol == "AAPL"
+
 
 def test_get_daily_prices_date_range(db: Session, market_data):  # noqa: ARG001
     # Using AAPL which has 5 days of data ending yesterday seeded in market_data
@@ -37,4 +40,6 @@ def test_get_daily_prices_date_range(db: Session, market_data):  # noqa: ARG001
     # market_data seeds: today-5, today-4, today-3, today-2, today-1
     # So expected dates: today-2, today-1
     assert len(prices) == 2
-    assert prices[0].date == today - timedelta(days=2) or prices[1].date == today - timedelta(days=2)
+    assert prices[0].date == today - timedelta(days=2) or prices[
+        1
+    ].date == today - timedelta(days=2)

@@ -42,20 +42,24 @@ class InferenceService:
         ohlc_data = crud.get_ohlc(session, symbol, days=10)  # Get 10 days worth
 
         if len(ohlc_data) < 60:
-            raise ValueError(f"Insufficient data for {symbol}. Need at least 60 bars, got {len(ohlc_data)}")
+            raise ValueError(
+                f"Insufficient data for {symbol}. Need at least 60 bars, got {len(ohlc_data)}"
+            )
 
         # 3. Convert to DataFrame
-        df = pd.DataFrame([
-            {
-                'date': row.date,
-                'open': row.open,
-                'high': row.high,
-                'low': row.low,
-                'close': row.close,
-                'volume': row.volume
-            }
-            for row in ohlc_data
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "date": row.date,
+                    "open": row.open,
+                    "high": row.high,
+                    "low": row.low,
+                    "close": row.close,
+                    "volume": row.volume,
+                }
+                for row in ohlc_data
+            ]
+        )
 
         # 4. Prepare features
         try:
@@ -71,18 +75,18 @@ class InferenceService:
         predicted_return = float(model.predict(features)[0])
 
         # 6. Calculate predicted price
-        current_price = float(df['close'].iloc[-1])
+        current_price = float(df["close"].iloc[-1])
         predicted_price = current_price * (1 + predicted_return)
 
         # 7. Get prediction date (1 day ahead)
-        last_date = df['date'].iloc[-1]
+        last_date = df["date"].iloc[-1]
         if isinstance(last_date, str):
             last_date = pd.to_datetime(last_date)
         prediction_date = last_date + timedelta(days=1)
 
         # 8. Get model version from metadata
         metadata = model_manager.metadata
-        training_date = metadata.get('training_date', 'unknown')
+        training_date = metadata.get("training_date", "unknown")
         model_version = f"xgboost-v1-{training_date[:10]}"
 
         return PredictionResponse(
@@ -92,5 +96,5 @@ class InferenceService:
             predicted_return=predicted_return * 100,  # Convert to percentage
             prediction_date=prediction_date,
             confidence=None,  # TODO: Add confidence calculation
-            model_version=model_version
+            model_version=model_version,
         )

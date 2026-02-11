@@ -14,8 +14,16 @@ def market_data(db: Session):
     Cleans up the data afterwards.
     """
     # 1. Clean up potential existing data to avoid conflicts
-    db.execute(text("DELETE FROM market.daily_prices WHERE symbol IN ('AAPL', 'GOOGL', 'TSLA', 'INACT')"))
-    db.execute(text("DELETE FROM market.stocks WHERE symbol IN ('AAPL', 'GOOGL', 'TSLA', 'INACT')"))
+    db.execute(
+        text(
+            "DELETE FROM market.daily_prices WHERE symbol IN ('AAPL', 'GOOGL', 'TSLA', 'INACT')"
+        )
+    )
+    db.execute(
+        text(
+            "DELETE FROM market.stocks WHERE symbol IN ('AAPL', 'GOOGL', 'TSLA', 'INACT')"
+        )
+    )
     db.commit()
 
     # 2. Seed Stocks
@@ -26,7 +34,7 @@ def market_data(db: Session):
             sector="Technology",
             industry="Consumer Electronics",
             exchange="NASDAQ",
-            is_active=True
+            is_active=True,
         ),
         Stock(
             symbol="GOOGL",
@@ -34,7 +42,7 @@ def market_data(db: Session):
             sector="Technology",
             industry="Internet Content & Information",
             exchange="NASDAQ",
-            is_active=True
+            is_active=True,
         ),
         Stock(
             symbol="TSLA",
@@ -42,7 +50,7 @@ def market_data(db: Session):
             sector="Consumer Cyclical",
             industry="Auto Manufacturers",
             exchange="NASDAQ",
-            is_active=True
+            is_active=True,
         ),
         Stock(
             symbol="INACT",
@@ -50,7 +58,7 @@ def market_data(db: Session):
             sector="N/A",
             industry="N/A",
             exchange="N/A",
-            is_active=False
+            is_active=False,
         ),
     ]
     db.add_all(stocks)
@@ -60,11 +68,51 @@ def market_data(db: Session):
     # Provide 5 days of data ending yesterday using relative dates
     today = date.today()
     prices = [
-        DailyPrice(symbol="AAPL", date=today - timedelta(days=5), open=150.0, high=155.0, low=149.0, close=153.0, volume=1000),
-        DailyPrice(symbol="AAPL", date=today - timedelta(days=4), open=153.0, high=158.0, low=152.0, close=157.0, volume=1100),
-        DailyPrice(symbol="AAPL", date=today - timedelta(days=3), open=157.0, high=159.0, low=156.0, close=158.0, volume=1200),
-        DailyPrice(symbol="AAPL", date=today - timedelta(days=2), open=158.0, high=162.0, low=158.0, close=161.0, volume=1300),
-        DailyPrice(symbol="AAPL", date=today - timedelta(days=1), open=161.0, high=165.0, low=160.0, close=164.0, volume=1400),
+        DailyPrice(
+            symbol="AAPL",
+            date=today - timedelta(days=5),
+            open=150.0,
+            high=155.0,
+            low=149.0,
+            close=153.0,
+            volume=1000,
+        ),
+        DailyPrice(
+            symbol="AAPL",
+            date=today - timedelta(days=4),
+            open=153.0,
+            high=158.0,
+            low=152.0,
+            close=157.0,
+            volume=1100,
+        ),
+        DailyPrice(
+            symbol="AAPL",
+            date=today - timedelta(days=3),
+            open=157.0,
+            high=159.0,
+            low=156.0,
+            close=158.0,
+            volume=1200,
+        ),
+        DailyPrice(
+            symbol="AAPL",
+            date=today - timedelta(days=2),
+            open=158.0,
+            high=162.0,
+            low=158.0,
+            close=161.0,
+            volume=1300,
+        ),
+        DailyPrice(
+            symbol="AAPL",
+            date=today - timedelta(days=1),
+            open=161.0,
+            high=165.0,
+            low=160.0,
+            close=164.0,
+            volume=1400,
+        ),
     ]
     db.add_all(prices)
     db.commit()
@@ -72,6 +120,14 @@ def market_data(db: Session):
     yield
 
     # 4. Cleanup
-    db.execute(text("DELETE FROM market.daily_prices WHERE symbol IN ('AAPL', 'GOOGL', 'TSLA', 'INACT')"))
-    db.execute(text("DELETE FROM market.stocks WHERE symbol IN ('AAPL', 'GOOGL', 'TSLA', 'INACT')"))
+    db.execute(
+        text(
+            "DELETE FROM market.daily_prices WHERE symbol IN ('AAPL', 'GOOGL', 'TSLA', 'INACT')"
+        )
+    )
+    db.execute(
+        text(
+            "DELETE FROM market.stocks WHERE symbol IN ('AAPL', 'GOOGL', 'TSLA', 'INACT')"
+        )
+    )
     db.commit()
