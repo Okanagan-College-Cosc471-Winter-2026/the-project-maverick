@@ -1,2 +1,2 @@
-export { InferenceService } from "./inference"
-export { MarketService } from "./market"
+export * as InferenceService from "./inference"
+export * as MarketService from "./market"

@@ -5,8 +5,9 @@ Ports the technical indicators from ml/features/technical_indicators.py
 to work with pandas DataFrames in the backend.
 """
 
-import pandas as pd
 from typing import Any
+
+import pandas as pd
 
 
 def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
