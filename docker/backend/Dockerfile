@@ -6,6 +6,10 @@ ENV PYTHONUNBUFFERED=1
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 
+# Install curl for health check
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Install dependencies (cached layer)
