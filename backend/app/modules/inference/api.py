@@ -17,13 +17,13 @@ router = APIRouter(prefix="/inference", tags=["inference"])
 def predict_stock_price(symbol: str, session: SessionDep) -> PredictionResponse:
     """
     Get 1-day price prediction for a stock.
-    
+
     Args:
         symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'MSFT')
-        
+
     Returns:
         Prediction with current price, predicted price, and expected return
-        
+
     Raises:
         404: Stock not found
         400: Insufficient data for prediction
