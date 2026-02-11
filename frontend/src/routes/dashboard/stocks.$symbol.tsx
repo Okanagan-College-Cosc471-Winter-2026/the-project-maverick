@@ -24,7 +24,7 @@ export const Route = createFileRoute("/dashboard/stocks/$symbol")({
   head: ({ params }) => ({
     meta: [
       {
-        title: `${params.symbol} - Stock Prediction`,
+        title: `${params.symbol} - MarketSight`,
       },
     ],
   }),
@@ -245,7 +245,7 @@ function ChartTab({ symbol }: { symbol: string }) {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="pl-2">
+      <CardContent className="p-2">
         <div className="h-[500px] w-full">
           <StockChart
             data={chartData}
@@ -328,10 +328,16 @@ function StockDetail() {
         </Suspense>
       </div>
 
-      <Tabs defaultValue="chart">
-        <TabsList>
-          <TabsTrigger value="chart">Chart</TabsTrigger>
-          <TabsTrigger value="details">Details</TabsTrigger>
+      <Tabs defaultValue="chart" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 h-12">
+          <TabsTrigger value="chart" className="text-base gap-2">
+            <LineChart className="h-4 w-4" />
+            Chart
+          </TabsTrigger>
+          <TabsTrigger value="details" className="text-base gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Details
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="chart">
           <Suspense fallback={<LoadingFallback />}>

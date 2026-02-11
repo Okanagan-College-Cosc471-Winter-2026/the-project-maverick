@@ -15,7 +15,7 @@ export const Route = createFileRoute("/dashboard/stocks")({
   head: () => ({
     meta: [
       {
-        title: "Stocks - Stock Prediction",
+        title: "Stocks - MarketSight",
       },
     ],
   }),
