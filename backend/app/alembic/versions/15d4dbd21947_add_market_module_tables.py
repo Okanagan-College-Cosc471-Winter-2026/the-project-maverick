@@ -52,8 +52,8 @@ def upgrade():
     op.create_index(op.f('ix_market_daily_prices_id'), 'daily_prices', ['id'], unique=False, schema='market')
     op.create_index(op.f('ix_market_daily_prices_symbol'), 'daily_prices', ['symbol'], unique=False, schema='market')
     op.drop_index(op.f('ix_user_email'), table_name='user')
-    op.drop_table('user')
     op.drop_table('item')
+    op.drop_table('user')
     # ### end Alembic commands ###
 
 
