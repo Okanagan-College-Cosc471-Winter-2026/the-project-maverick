@@ -1,44 +1,46 @@
-from datetime import datetime, timedelta, timezone
-from typing import Any
+"""
+Inference API endpoints.
 
-from fastapi import APIRouter
-from pydantic import BaseModel
+Provides stock price prediction using trained XGBoost model.
+"""
+
+from fastapi import APIRouter, HTTPException
+
+from app.api.deps import SessionDep
+from app.modules.inference.schemas import PredictionResponse
+from app.modules.inference.service import InferenceService
 
 router = APIRouter(prefix="/inference", tags=["inference"])
 
 
-class PredictionRequest(BaseModel):
-    symbol: str
-    horizon: str = "1d"
-    features_override: dict[str, Any] | None = None
-
-
-class PredictionResponse(BaseModel):
-    symbol: str
-    prediction: float
-    confidence: float
-    model_version: str
-    predicted_at: datetime
-    prediction_target_time: int
-
-
-HORIZON_HOURS: dict[str, int] = {"1h": 1, "4h": 4, "1d": 24, "1w": 168}
-
-
-@router.post("/predict", response_model=PredictionResponse)
-def predict(request: PredictionRequest) -> PredictionResponse:
+@router.get("/predict/{symbol}", response_model=PredictionResponse)
+def predict_stock_price(symbol: str, session: SessionDep) -> PredictionResponse:
     """
-    Get prediction for a stock.
+    Get 1-day price prediction for a stock.
+    
+    Args:
+        symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'MSFT')
+        
+    Returns:
+        Prediction with current price, predicted price, and expected return
+        
+    Raises:
+        404: Stock not found
+        400: Insufficient data for prediction
+        500: Model error
     """
-    now = datetime.now(timezone.utc)
-    hours = HORIZON_HOURS.get(request.horizon, 24)
-    target = now + timedelta(hours=hours)
-
-    return PredictionResponse(
-        symbol=request.symbol,
-        prediction=150.0,
-        confidence=0.85,
-        model_version="v1-dummy",
-        predicted_at=now,
-        prediction_target_time=int(target.timestamp()),
-    )
+    try:
+        return InferenceService.predict_stock_price(session, symbol.upper())
+    except ValueError as e:
+        # Stock not found or insufficient data
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
+            raise HTTPException(status_code=404, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
+    except Exception as e:
+        # Model loading or prediction error
+        raise HTTPException(
+            status_code=500,
+            detail=f"Prediction error: {str(e)}"
+        )
