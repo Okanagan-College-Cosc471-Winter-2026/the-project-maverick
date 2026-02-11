@@ -1,0 +1,19 @@
+[
+  "ret_1",
+  "ret_5",
+  "ret_10",
+  "ret_20",
+  "dist_sma_10",
+  "dist_sma_20",
+  "dist_sma_50",
+  "rsi",
+  "macd",
+  "macd_signal",
+  "macd_diff",
+  "bb_width",
+  "bb_position",
+  "volatility_20",
+  "vol_ratio",
+  "dayofweek",
+  "month"
+]

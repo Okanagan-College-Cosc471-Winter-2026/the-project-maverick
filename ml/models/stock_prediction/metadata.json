@@ -1,0 +1,22 @@
+{
+  "training_date": "2026-02-11T06:57:33.999465",
+  "model_type": "XGBoost Regressor",
+  "prediction_horizon": 26,
+  "hyperparameters": {
+    "n_estimators": 500,
+    "max_depth": 6,
+    "learning_rate": 0.05,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "objective": "reg:squarederror",
+    "random_state": 42,
+    "n_jobs": -1,
+    "tree_method": "hist"
+  },
+  "metrics": {
+    "rmse": 0.11398600312467118,
+    "mae": 0.09179126075028589,
+    "directional_accuracy": 0.35658914728682173
+  },
+  "feature_count": 17
+}
