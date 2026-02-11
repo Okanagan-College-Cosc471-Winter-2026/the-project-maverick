@@ -44,6 +44,10 @@ jobs:
       - name: Install Dependencies
         run: uv sync --frozen
         working-directory: backend
+
+      - name: Run Database Migrations
+        run: uv run alembic upgrade head
+        working-directory: backend
         
       - name: Run Pytest
         run: uv run pytest tests/ -v

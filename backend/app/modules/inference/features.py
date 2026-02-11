@@ -6,6 +6,7 @@ to work with pandas DataFrames in the backend.
 """
 
 import pandas as pd
+from typing import Any
 
 
 def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -90,7 +91,7 @@ def get_feature_columns() -> list[str]:
     ]
 
 
-def prepare_features_for_prediction(df: pd.DataFrame, symbol: str, ticker_encoder) -> pd.DataFrame:
+def prepare_features_for_prediction(df: pd.DataFrame, symbol: str, ticker_encoder: Any) -> pd.DataFrame:
     """
     Prepare features for a single prediction.
 

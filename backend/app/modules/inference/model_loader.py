@@ -7,9 +7,9 @@ Implements singleton pattern to load model once on startup.
 import json
 import logging
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
-import joblib
+import joblib  # type: ignore[import-untyped]
 from xgboost import XGBRegressor
 
 logger = logging.getLogger(__name__)
@@ -25,8 +25,8 @@ class ModelManager:
     _instance: ClassVar["ModelManager | None"] = None
     _model: XGBRegressor | None = None
     _feature_names: list[str] | None = None
-    _metadata: dict | None = None
-    _ticker_encoder = None
+    _metadata: dict[str, Any] | None = None
+    _ticker_encoder: Any = None
     _model_path: Path
 
     def __new__(cls) -> "ModelManager":
@@ -94,7 +94,7 @@ class ModelManager:
         return self._feature_names
 
     @property
-    def metadata(self) -> dict:
+    def metadata(self) -> dict[str, Any]:
         """Get the model metadata."""
         if self._metadata is None:
             self.load_model()
@@ -102,7 +102,7 @@ class ModelManager:
         return self._metadata
 
     @property
-    def ticker_encoder(self):
+    def ticker_encoder(self) -> Any:
         """Get the ticker encoder."""
         if self._ticker_encoder is None:
             self.load_model()
