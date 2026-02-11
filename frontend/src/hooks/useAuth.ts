@@ -1,61 +1,42 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 
-import {
-  type Body_login_login_access_token as AccessToken,
-  LoginService,
-  type UserPublic,
-  type UserRegister,
-  UsersService,
-} from "@/client"
-import { handleError } from "@/utils"
-import useCustomToast from "./useCustomToast"
+import type { UserPublic } from "@/client"
 
+// Always return true as authentication is disabled
 const isLoggedIn = () => {
-  return localStorage.getItem("access_token") !== null
+  return true
 }
 
 const useAuth = () => {
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const { showErrorToast } = useCustomToast()
 
-  const { data: user } = useQuery<UserPublic | null, Error>({
-    queryKey: ["currentUser"],
-    queryFn: UsersService.readUserMe,
-    enabled: isLoggedIn(),
-  })
-
-  const signUpMutation = useMutation({
-    mutationFn: (data: UserRegister) =>
-      UsersService.registerUser({ requestBody: data }),
-    onSuccess: () => {
-      navigate({ to: "/login" })
-    },
-    onError: handleError.bind(showErrorToast),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["users"] })
-    },
-  })
-
-  const login = async (data: AccessToken) => {
-    const response = await LoginService.loginAccessToken({
-      formData: data,
-    })
-    localStorage.setItem("access_token", response.access_token)
+  // Mock user object
+  const user: UserPublic = {
+    email: "guest@example.com",
+    is_active: true,
+    is_superuser: false,
+    full_name: "Guest User",
+    id: "guest-id",
   }
 
-  const loginMutation = useMutation({
-    mutationFn: login,
+  // No-op mutations since there's no real auth
+  const signUpMutation = useMutation({
+    mutationFn: async () => { },
     onSuccess: () => {
-      navigate({ to: "/" })
+      navigate({ to: "/dashboard" })
     },
-    onError: handleError.bind(showErrorToast),
+  })
+
+  const loginMutation = useMutation({
+    mutationFn: async () => { },
+    onSuccess: () => {
+      navigate({ to: "/dashboard" })
+    },
   })
 
   const logout = () => {
-    localStorage.removeItem("access_token")
-    navigate({ to: "/login" })
+    navigate({ to: "/" })
   }
 
   return {
