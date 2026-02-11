@@ -131,54 +131,46 @@ Depending on your workflow, you could want to exclude it from Git, for example i
 
 One way to do it could be to add each environment variable to your CI/CD system, and updating the `compose.yml` file to read that specific env var instead of reading the `.env` file.
 
-## Pre-commits and code linting
+## ✅ Code Quality & Verification
 
-we are using a tool called [prek](https://prek.j178.dev/) (modern alternative to [Pre-commit](https://pre-commit.com/)) for code linting and formatting.
+We use a modern, fast toolchain to ensure code quality.
 
-When you install it, it runs right before making a commit in git. This way it ensures that the code is consistent and formatted even before it is committed.
-
-You can find a file `.pre-commit-config.yaml` with configurations at the root of the project.
-
-#### Install prek to run automatically
-
-`prek` is already part of the dependencies of the project.
-
-After having the `prek` tool installed and available, you need to "install" it in the local repository, so that it runs automatically before each commit.
-
-Using `uv`, you could do it with (make sure you are inside `backend` folder):
+### Backend Verification
+Run these commands from the `backend/` directory:
 
 ```bash
-❯ uv run prek install -f
-prek installed at `../.git/hooks/pre-commit`
+# 1. Linting & Formatting (Ruff)
+uv run ruff check .
+uv run ruff format .
+
+# 2. Type Checking (Mypy)
+uv run mypy app
+
+# 3. Running Tests (Pytest)
+uv run pytest tests/ -v
 ```
 
-The `-f` flag forces the installation, in case there was already a `pre-commit` hook previously installed.
-
-Now whenever you try to commit, e.g. with:
+### Frontend Verification
+Run these commands from the `frontend/` directory:
 
 ```bash
-git commit
+# 1. Linting (Biome)
+bunx biome check .
+
+# 2. Type Checking
+bun run tsc --noEmit
+
+# 3. Build Check
+bun run build
 ```
 
-...prek will run and check and format the code you are about to commit, and will ask you to add that code (stage it) with git again before committing.
-
-Then you can `git add` the modified/fixed files again and now you can commit.
-
-#### Running prek hooks manually
-
-you can also run `prek` manually on all the files, you can do it using `uv` with:
-
-```bash
-❯ uv run prek run --all-files
-check for added large files..............................................Passed
-check toml...............................................................Passed
-check yaml...............................................................Passed
-fix end of files.........................................................Passed
-trim trailing whitespace.................................................Passed
-ruff.....................................................................Passed
-ruff-format..............................................................Passed
-biome check..............................................................Passed
-```
+### CI/CD Pipeline
+GitHub Actions automatically runs these checks on every Pull Request:
+1.  **Backend Lint**: Ruff + formatting check
+2.  **Backend Types**: Mypy static analysis
+3.  **Backend Tests**: Pytest with a real Postgres service (verified with migrations)
+4.  **Frontend Lint**: Biome check
+5.  **Build**: Docker builds for both services
 
 ## URLs
 

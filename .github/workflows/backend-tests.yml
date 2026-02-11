@@ -1,0 +1,54 @@
+name: Backend Tests Only
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Backend Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: changethis
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      POSTGRES_SERVER: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: changethis
+      POSTGRES_DB: app
+      ENVIRONMENT: local
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          
+      - name: Install Dependencies
+        run: uv sync --frozen
+        working-directory: backend
+
+      - name: Run Database Migrations
+        run: uv run alembic upgrade head
+        working-directory: backend
+        
+      - name: Run Pytest
+        run: uv run pytest tests/ -v
+        working-directory: backend

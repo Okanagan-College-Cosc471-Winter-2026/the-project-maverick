@@ -37,8 +37,6 @@ export const StockChart = (props: {
       backgroundColor = "transparent",
       lineColor = "#2962FF",
       textColor = "#A1A1AA", // muted-foreground
-      areaTopColor = "#2962FF",
-      areaBottomColor = "rgba(41, 98, 255, 0.28)",
     } = {},
   } = props
 

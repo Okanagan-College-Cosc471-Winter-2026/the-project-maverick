@@ -41,12 +41,12 @@ def get_daily_prices(
 def get_ohlc(session: Session, symbol: str, days: int = 365) -> list[DailyPrice]:
     """
     Return recent OHLC data for a symbol.
-    
+
     Args:
         session: Database session
         symbol: Stock symbol
         days: Number of days of history to retrieve (default 365)
-        
+
     Returns:
         List of DailyPrice records, ordered by date ascending
     """

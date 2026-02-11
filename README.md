@@ -11,133 +11,55 @@
 A production-ready system that leverages XGBoost machine learning to provide real-time stock price predictions with live dashboard visualization. The system continuously monitors market data, calculates technical indicators, and generates predictions with confidence scores.
 
 ## 🌟 Key Features
-
-- **Real-Time Predictions**: Automated polling every 5 seconds with sub-second prediction latency
-- **Machine Learning**: XGBoost gradient boosting model trained on historical stock data
-- **Live Dashboard**: React-based interactive dashboard with real-time charts
-- **WebSocket Streaming**: Instant prediction updates pushed to connected clients
-- **High Performance**: Sub-300ms API response times, 85% cache hit ratio
-- **Scalable Architecture**: Docker-based deployment, horizontal scaling ready
-- **Type Safety**: End-to-end type safety with TypeScript and Pydantic
+- **Real-Time Predictions**: Automated polling (configurable interval) with sub-second inference.
+- **Advanced Machine Learning**: XGBoost model trained on historical data with technical indicators (RSI, MACD, Bollinger Bands).
+- **Interactive Dashboard**: Modern React UI with Recharts, measuring forecast accuracy in real-time.
+- **Robust Backend**: FastAPI application with SQLAlchemy v2, Alembic migrations, and Pydantic v2 validation.
+- **Enterprise-Grade Testing**: Comprehensive `pytest` suite covering API, CRUD, and ML inference with dedicated CI pipelines.
+- **Developer Experience**: Fully dockerized stack, `uv` for minimal-latency dependency management, and type-safety throughout (Mypy/TypeScript).
 
 ## 🏗️ System Architecture
 
-### High-Level Architecture
-
+### High-Level Components
 ![System Architecture](Documentation/image.png)
 
-The system follows a layered architecture pattern with clear separation of concerns:
-
-- **Frontend Layer**: React + TypeScript dashboard with Recharts visualization
-- **Backend Layer**: MarketSight async server with background polling
-- **ML Layer**: XGBoost model with NumPy/Pandas feature engineering
-- **Data Layer**: PostgreSQL for persistence, Redis for caching
+- **Frontend**: React 19 + TypeScript + Vite. Features a dynamic StockChart with confidence intervals.
+- **Backend Service**: FastAPI. Handles REST API, WebSocket streaming (planned), and background data polling.
+- **ML Engine**: XGBoost Regressor wrapped in a thread-safe Singleton `ModelManager`.
+- **Database**: PostgreSQL (Application Data) + TimescaleDB ready (Market Data).
 
 ### Data Flow
-
 ![Processing Flow](Documentation/Screenshot_2026-01-27_at_7.50.23_PM.png)
 
-1. **Data Detection**: Background poller monitors data warehouse every 5 seconds
-2. **Feature Engineering**: Calculate technical indicators (MA, RSI, volatility)
-3. **Prediction**: XGBoost model generates price prediction + confidence
-4. **Storage**: Results saved to PostgreSQL and cached in Redis
-5. **Notification**: WebSocket pushes update to connected dashboards
-6. **Visualization**: React charts update in real-time
+1. **Ingestion**: Background tasks poll external data sources (mocked for dev).
+2. **Processing**: `pandas` pipeline calculates technical indicators from OHLCV data.
+3. **Inference**: XGBoost model predicts the next closing price.
+4. **Persistence**: Predictions and actuals are stored in Postgres for accuracy tracking.
+5. **Consumption**: Frontend fetches real-time data via optimized API endpoints.
 
 ### Use Cases
-
 ![Use Cases](Documentation/Screenshot_2026-01-27_at_7.50.52_PM.png)
-
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- **Docker Desktop** (20.10+) and **Docker Compose** (2.0+)
-- **Git**
-- **8GB RAM** minimum
-- **10GB** disk space
-
-### Installation
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/your-org/stock-prediction-system](https://github.com/Okanagan-College-Cosc471-Winter-2026/the-project-maverick.git
-cd stock-prediction-system
-
-# 2. Copy and configure environment variables
-cp .env.example .env
-# Edit .env with your data warehouse credentials
-
-# 3. Start all services
-docker-compose up -d
-
-# 4. Verify installation
-curl http://localhost:8000/api/v1/health
-```
-
-### Access Points
-
-| Service | URL | Description |
-|---------|-----|-------------|
-| **Frontend Dashboard** | http://localhost:5173 | Interactive web dashboard |
-| **Backend API** | http://localhost:8000 | REST API endpoints |
-| **API Documentation** | http://localhost:8000/docs | Swagger UI |
-| **Alternative Docs** | http://localhost:8000/redoc | ReDoc UI |
-
-## 📊 Dashboard Preview
-
-The dashboard provides:
-
-- **Live Price Charts**: Actual vs predicted prices with real-time updates
-- **Symbol Selector**: Switch between different stocks (AAPL, GOOGL, MSFT, etc.)
-- **Confidence Indicators**: Visual representation of prediction confidence
-- **Historical Accuracy**: Track prediction performance over time
-- **Auto-Refresh**: WebSocket-powered updates without page reload
 
 ## 🛠️ Technology Stack
 
+### Backend & ML
+- **Framework**: FastAPI (Async)
+- **Database**: PostgreSQL 16
+- **ORM**: SQLAlchemy 2.0 (Async/Sync compatible)
+- **Migrations**: Alembic (Auto-schema generation)
+- **ML**: XGBoost, Scikit-Learn, Pandas, NumPy
+- **Tooling**: `uv` (Package Manager), `ruff` (Linting), `mypy` (Type Checking)
+- **Testing**: `pytest`, `httpx`
+
 ### Frontend
+- **Framework**: React 19
+- **Build Tool**: Vite
+- **Language**: TypeScript
+- **Styling**: TailwindCSS (via `cn` utility)
+- **Visualization**: Recharts
+- **State/Fetching**: TanStack Query (React Query)
+- **Linting**: Biome
 
-| Technology | Purpose |
-|------------|---------|
-| **React 19** | UI framework with modern hooks and concurrent features |
-| **TypeScript** | Type safety and improved developer experience |
-| **Vite** | Fast build tool with instant HMR |
-| **Recharts** | Declarative charting library for React |
-| **TanStack Query** | Data fetching, caching, and state management |
-
-### Backend
-
-| Technology | Purpose |
-|------------|---------|
-| **MarketSight** | High-performance async Python web framework |
-| **Pydantic** | Data validation using Python type hints |
-| **SQLModel** | Type-safe ORM combining SQLAlchemy + Pydantic |
-| **AsyncIO** | Concurrent operations and background tasks |
-
-### Machine Learning
-
-| Technology | Purpose |
-|------------|---------|
-| **XGBoost** | Gradient boosting framework for predictions |
-| **NumPy** | Fast numerical operations and array processing |
-| **Pandas** | Time-series analysis and feature engineering |
-| **scikit-learn** | ML utilities and preprocessing |
-
-### Data Storage
-
-| Technology | Purpose |
-|------------|---------|
-| **PostgreSQL** | Primary database with ACID compliance |
-| **Redis** | High-speed caching layer (85% hit ratio) |
-
-### DevOps
-
-| Technology | Purpose |
-|------------|---------|
-| **Docker** | Containerization for consistent environments |
-| **Docker Compose** | Multi-container orchestration |
 
 ## 📁 Project Structure
 
@@ -441,23 +363,50 @@ Deployment guides available for:
 
 See `docs/DEPLOYMENT.md` for detailed instructions.
 
-## 🧪 Testing
+## 🧪 Development & Testing
+
+### Backend Setup (Local)
+We use `uv` for ultra-fast dependency management.
 
 ```bash
-# Backend tests
+cd backend
+# 1. Install dependencies
+uv sync
+
+# 2. Run Database Migrations (Crucial!)
+#    This creates tables like 'market.stocks' in your local DB
+uv run alembic upgrade head
+
+# 3. Start Dev Server
+uv run fastapi dev app/main.py --host 0.0.0.0
+```
+
+### Running Tests
+The project includes a robust test suite covering API, DB, and ML logic.
+
+```bash
+# Run all backend tests
 cd backend
 uv run pytest tests/ -v
 
-# Frontend tests
+# Run linting (Ruff)
+uv run ruff check .
+
+# Run type checking (Mypy)
+uv run mypy app
+```
+
+### Frontend Setup (Local)
+```bash
 cd frontend
-npm test
+# 1. Install dependencies (Bun)
+bun install
 
-# End-to-end tests
-npm run test:e2e
+# 2. Start Dev Server
+bun run dev
 
-# Load testing
-cd scripts
-python load_test.py --users 100 --duration 60
+# 3. Build for Production
+bun run build
 ```
 
 ## 📈 Scaling

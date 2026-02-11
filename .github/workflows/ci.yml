@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -60,17 +62,16 @@ jobs:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: changethis
       POSTGRES_DB: app
-      PROJECT_NAME: test
       ENVIRONMENT: local
-      FRONTEND_HOST: http://localhost:5173
-      FIRST_SUPERUSER: admin@example.com
-      FIRST_SUPERUSER_PASSWORD: changethis
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
       - run: uv sync --frozen
+        working-directory: backend
+      - name: Run Database Migrations
+        run: uv run alembic upgrade head
         working-directory: backend
       - run: uv run pytest tests/ -v
         working-directory: backend
