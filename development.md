@@ -1,4 +1,4 @@
-# FastAPI Project - Development
+# MarketSight Project - Development
 
 ## Docker Compose
 
@@ -76,7 +76,7 @@ And then you can run the local development server for the backend:
 
 ```bash
 cd backend
-fastapi dev app/main.py
+MarketSight dev app/main.py
 ```
 
 ## Docker Compose in `localhost.tiangolo.com`
