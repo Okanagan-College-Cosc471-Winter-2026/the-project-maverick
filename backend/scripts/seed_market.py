@@ -2,7 +2,7 @@
 Seed the market schema with sample data.
 
 Creates:
-  - market.stocks     → 3 sample stocks (mirrors dim_stock + dim_company)
+  - market.stocks     → 5 sample stocks (mirrors dim_stock + dim_company)
   - market.daily_prices → ~2 years of daily OHLC per stock (mirrors fact_market_metrics)
 
 Skips weekends and US market holidays for realistic trading calendars.
@@ -24,42 +24,11 @@ from sqlalchemy import insert, text
 
 from app.core.db import Base, SessionLocal, engine
 from app.modules.market.models import DailyPrice, Stock
+from scripts.stock_config import STOCKS
 
 # ---------------------------------------------------------------------------
-# Sample stock metadata (mirrors dim_stock + dim_company)
+# Configuration
 # ---------------------------------------------------------------------------
-
-STOCKS = [
-    {
-        "symbol": "AAPL",
-        "name": "Apple Inc.",
-        "sector": "Technology",
-        "industry": "Consumer Electronics",
-        "currency": "USD",
-        "exchange": "NASDAQ",
-        "is_active": True,
-    },
-    {
-        "symbol": "MSFT",
-        "name": "Microsoft Corp.",
-        "sector": "Technology",
-        "industry": "Software — Infrastructure",
-        "currency": "USD",
-        "exchange": "NASDAQ",
-        "is_active": True,
-    },
-    {
-        "symbol": "GOOGL",
-        "name": "Alphabet Inc.",
-        "sector": "Communication Services",
-        "industry": "Internet Content & Information",
-        "currency": "USD",
-        "exchange": "NASDAQ",
-        "is_active": True,
-    },
-]
-
-START_PRICES = {"AAPL": 145.0, "MSFT": 340.0, "GOOGL": 130.0}
 DAYS = 730  # ~2 years
 
 # Fixed US holidays (month, day)
@@ -236,7 +205,7 @@ def main() -> None:
         # Seed daily prices per stock
         for stock in STOCKS:
             symbol = stock["symbol"]
-            price = START_PRICES[symbol]
+            price = stock["start_price"]
             print(f"  {symbol} (${price:.2f}) ...", end=" ")
 
             rows = _gen_daily_prices(symbol, start, end, price, holidays)
