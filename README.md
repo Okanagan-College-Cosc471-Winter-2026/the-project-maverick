@@ -3,7 +3,7 @@
 > **Real-Time ML-Powered Stock Price Prediction Platform**
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![MarketSight](https://img.shields.io/badge/MarketSight-0.104+-green.svg)](https://MarketSight.tiangolo.com/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6.svg)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -29,7 +29,7 @@ A production-ready system that leverages XGBoost machine learning to provide rea
 The system follows a layered architecture pattern with clear separation of concerns:
 
 - **Frontend Layer**: React + TypeScript dashboard with Recharts visualization
-- **Backend Layer**: MarketSight async server with background polling
+- **Backend Layer**: FastAPI async server with background polling
 - **ML Layer**: XGBoost model with NumPy/Pandas feature engineering
 - **Data Layer**: PostgreSQL for persistence, Redis for caching
 
@@ -111,7 +111,7 @@ The dashboard provides:
 
 | Technology | Purpose |
 |------------|---------|
-| **MarketSight** | High-performance async Python web framework |
+| **FastAPI** | High-performance async Python web framework |
 | **Pydantic** | Data validation using Python type hints |
 | **SQLModel** | Type-safe ORM combining SQLAlchemy + Pydantic |
 | **AsyncIO** | Concurrent operations and background tasks |
@@ -143,9 +143,9 @@ The dashboard provides:
 
 ```
 stock-prediction-system/
-├── backend/                    # Python MarketSight backend
+├── backend/                    # Python FastAPI backend
 │   ├── app/
-│   │   ├── main.py            # MarketSight application entry point
+│   │   ├── main.py            # FastAPI application entry point
 │   │   ├── poller.py          # Background polling service
 │   │   ├── features.py        # Feature engineering pipeline
 │   │   ├── model.py           # XGBoost model service
@@ -342,14 +342,14 @@ uv sync
 uv run alembic upgrade head
 
 # Start development server with auto-reload
-uv run MarketSight dev app/main.py
+uv run fastapi dev app/main.py
 ```
 
 You can also activate the virtual environment manually if you prefer:
 
 ```bash
 source .venv/bin/activate
-MarketSight dev app/main.py
+fastapi dev app/main.py
 ```
 
 ### Frontend Development
@@ -468,7 +468,7 @@ python load_test.py --users 100 --duration 60
 ### Scaling Strategy
 
 **Phase 2 (Next 6 Months)**
-- 3x MarketSight instances behind load balancer
+- 3x FastAPI instances behind load balancer
 - PostgreSQL read replicas
 - Redis cluster
 - **Capacity**: 1,000 users, 10,000 predictions/day
@@ -550,7 +550,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - XGBoost team for the excellent gradient boosting library
-- MarketSight community for the amazing framework
+- FastAPI community for the amazing framework
 - React team for the powerful UI library
 - All our contributors and supporters
 

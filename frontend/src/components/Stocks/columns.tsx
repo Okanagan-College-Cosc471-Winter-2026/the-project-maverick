@@ -10,9 +10,9 @@ export const columns: ColumnDef<StockRead>[] = [
     header: "Symbol",
     cell: ({ row }) => (
       <Link
-        to="/dashboard/stocks/$symbol"
+        to="/stocks/$symbol"
         params={{ symbol: row.original.symbol }}
-        className="font-medium text-blue-600 hover:underline"
+        className="font-mono font-semibold text-primary hover:underline"
       >
         {row.original.symbol}
       </Link>

@@ -1,5 +1,5 @@
 import { useSuspenseQuery } from "@tanstack/react-query"
-import { createFileRoute, Outlet, useParams } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
 import { Search } from "lucide-react"
 import { Suspense, useMemo, useState } from "react"
 
@@ -81,15 +81,8 @@ function StocksTableContent({ search }: { search: string }) {
 }
 
 function Stocks() {
-  const params = useParams({ strict: false })
   const [search, setSearch] = useState("")
 
-  // If we have a symbol param, render the child route (stock detail page)
-  if (params.symbol) {
-    return <Outlet />
-  }
-
-  // Otherwise, render the stocks list
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">

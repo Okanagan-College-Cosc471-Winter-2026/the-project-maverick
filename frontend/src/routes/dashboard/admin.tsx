@@ -29,7 +29,7 @@ export const Route = createFileRoute("/dashboard/admin")({
   head: () => ({
     meta: [
       {
-        title: "Admin - MarketSight Cloud",
+        title: "Admin - FastAPI Cloud",
       },
     ],
   }),
