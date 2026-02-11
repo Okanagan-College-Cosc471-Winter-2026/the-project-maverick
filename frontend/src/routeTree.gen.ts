@@ -9,278 +9,219 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SignupRouteImport } from './routes/signup'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as RecoverPasswordRouteImport } from './routes/recover-password'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as LayoutRouteImport } from './routes/_layout'
-import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
-import { Route as LayoutStocksRouteImport } from './routes/_layout/stocks'
-import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
-import { Route as LayoutPredictionsRouteImport } from './routes/_layout/predictions'
-import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
-import { Route as LayoutStocksSymbolRouteImport } from './routes/_layout/stocks.$symbol'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
+import { Route as DashboardStocksRouteImport } from './routes/dashboard/stocks'
+import { Route as DashboardSettingsRouteImport } from './routes/dashboard/settings'
+import { Route as DashboardPredictionsRouteImport } from './routes/dashboard/predictions'
+import { Route as DashboardAdminRouteImport } from './routes/dashboard/admin'
+import { Route as DashboardStocksSymbolRouteImport } from './routes/dashboard/stocks.$symbol'
 
-const SignupRoute = SignupRouteImport.update({
-  id: '/signup',
-  path: '/signup',
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RecoverPasswordRoute = RecoverPasswordRouteImport.update({
-  id: '/recover-password',
-  path: '/recover-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LayoutRoute = LayoutRouteImport.update({
-  id: '/_layout',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LayoutIndexRoute = LayoutIndexRouteImport.update({
+const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => LayoutRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-const LayoutStocksRoute = LayoutStocksRouteImport.update({
+const DashboardIndexRoute = DashboardIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardStocksRoute = DashboardStocksRouteImport.update({
   id: '/stocks',
   path: '/stocks',
-  getParentRoute: () => LayoutRoute,
+  getParentRoute: () => DashboardRoute,
 } as any)
-const LayoutSettingsRoute = LayoutSettingsRouteImport.update({
+const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => LayoutRoute,
+  getParentRoute: () => DashboardRoute,
 } as any)
-const LayoutPredictionsRoute = LayoutPredictionsRouteImport.update({
+const DashboardPredictionsRoute = DashboardPredictionsRouteImport.update({
   id: '/predictions',
   path: '/predictions',
-  getParentRoute: () => LayoutRoute,
+  getParentRoute: () => DashboardRoute,
 } as any)
-const LayoutAdminRoute = LayoutAdminRouteImport.update({
+const DashboardAdminRoute = DashboardAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
-  getParentRoute: () => LayoutRoute,
+  getParentRoute: () => DashboardRoute,
 } as any)
-const LayoutStocksSymbolRoute = LayoutStocksSymbolRouteImport.update({
+const DashboardStocksSymbolRoute = DashboardStocksSymbolRouteImport.update({
   id: '/$symbol',
   path: '/$symbol',
-  getParentRoute: () => LayoutStocksRoute,
+  getParentRoute: () => DashboardStocksRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof LayoutIndexRoute
-  '/login': typeof LoginRoute
-  '/recover-password': typeof RecoverPasswordRoute
-  '/reset-password': typeof ResetPasswordRoute
-  '/signup': typeof SignupRoute
-  '/admin': typeof LayoutAdminRoute
-  '/predictions': typeof LayoutPredictionsRoute
-  '/settings': typeof LayoutSettingsRoute
-  '/stocks': typeof LayoutStocksRouteWithChildren
-  '/stocks/$symbol': typeof LayoutStocksSymbolRoute
+  '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRouteWithChildren
+  '/dashboard/admin': typeof DashboardAdminRoute
+  '/dashboard/predictions': typeof DashboardPredictionsRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/stocks': typeof DashboardStocksRouteWithChildren
+  '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/stocks/$symbol': typeof DashboardStocksSymbolRoute
 }
 export interface FileRoutesByTo {
-  '/login': typeof LoginRoute
-  '/recover-password': typeof RecoverPasswordRoute
-  '/reset-password': typeof ResetPasswordRoute
-  '/signup': typeof SignupRoute
-  '/admin': typeof LayoutAdminRoute
-  '/predictions': typeof LayoutPredictionsRoute
-  '/settings': typeof LayoutSettingsRoute
-  '/stocks': typeof LayoutStocksRouteWithChildren
-  '/': typeof LayoutIndexRoute
-  '/stocks/$symbol': typeof LayoutStocksSymbolRoute
+  '/': typeof IndexRoute
+  '/dashboard/admin': typeof DashboardAdminRoute
+  '/dashboard/predictions': typeof DashboardPredictionsRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/stocks': typeof DashboardStocksRouteWithChildren
+  '/dashboard': typeof DashboardIndexRoute
+  '/dashboard/stocks/$symbol': typeof DashboardStocksSymbolRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/_layout': typeof LayoutRouteWithChildren
-  '/login': typeof LoginRoute
-  '/recover-password': typeof RecoverPasswordRoute
-  '/reset-password': typeof ResetPasswordRoute
-  '/signup': typeof SignupRoute
-  '/_layout/admin': typeof LayoutAdminRoute
-  '/_layout/predictions': typeof LayoutPredictionsRoute
-  '/_layout/settings': typeof LayoutSettingsRoute
-  '/_layout/stocks': typeof LayoutStocksRouteWithChildren
-  '/_layout/': typeof LayoutIndexRoute
-  '/_layout/stocks/$symbol': typeof LayoutStocksSymbolRoute
+  '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRouteWithChildren
+  '/dashboard/admin': typeof DashboardAdminRoute
+  '/dashboard/predictions': typeof DashboardPredictionsRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/stocks': typeof DashboardStocksRouteWithChildren
+  '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/stocks/$symbol': typeof DashboardStocksSymbolRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/login'
-    | '/recover-password'
-    | '/reset-password'
-    | '/signup'
-    | '/admin'
-    | '/predictions'
-    | '/settings'
-    | '/stocks'
-    | '/stocks/$symbol'
+    | '/dashboard'
+    | '/dashboard/admin'
+    | '/dashboard/predictions'
+    | '/dashboard/settings'
+    | '/dashboard/stocks'
+    | '/dashboard/'
+    | '/dashboard/stocks/$symbol'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/login'
-    | '/recover-password'
-    | '/reset-password'
-    | '/signup'
-    | '/admin'
-    | '/predictions'
-    | '/settings'
-    | '/stocks'
     | '/'
-    | '/stocks/$symbol'
+    | '/dashboard/admin'
+    | '/dashboard/predictions'
+    | '/dashboard/settings'
+    | '/dashboard/stocks'
+    | '/dashboard'
+    | '/dashboard/stocks/$symbol'
   id:
     | '__root__'
-    | '/_layout'
-    | '/login'
-    | '/recover-password'
-    | '/reset-password'
-    | '/signup'
-    | '/_layout/admin'
-    | '/_layout/predictions'
-    | '/_layout/settings'
-    | '/_layout/stocks'
-    | '/_layout/'
-    | '/_layout/stocks/$symbol'
+    | '/'
+    | '/dashboard'
+    | '/dashboard/admin'
+    | '/dashboard/predictions'
+    | '/dashboard/settings'
+    | '/dashboard/stocks'
+    | '/dashboard/'
+    | '/dashboard/stocks/$symbol'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  LayoutRoute: typeof LayoutRouteWithChildren
-  LoginRoute: typeof LoginRoute
-  RecoverPasswordRoute: typeof RecoverPasswordRoute
-  ResetPasswordRoute: typeof ResetPasswordRoute
-  SignupRoute: typeof SignupRoute
+  IndexRoute: typeof IndexRoute
+  DashboardRoute: typeof DashboardRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/signup': {
-      id: '/signup'
-      path: '/signup'
-      fullPath: '/signup'
-      preLoaderRoute: typeof SignupRouteImport
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/recover-password': {
-      id: '/recover-password'
-      path: '/recover-password'
-      fullPath: '/recover-password'
-      preLoaderRoute: typeof RecoverPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_layout': {
-      id: '/_layout'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof LayoutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_layout/': {
-      id: '/_layout/'
+    '/': {
+      id: '/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof LayoutIndexRouteImport
-      parentRoute: typeof LayoutRoute
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_layout/stocks': {
-      id: '/_layout/stocks'
+    '/dashboard/': {
+      id: '/dashboard/'
+      path: '/'
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof DashboardIndexRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/stocks': {
+      id: '/dashboard/stocks'
       path: '/stocks'
-      fullPath: '/stocks'
-      preLoaderRoute: typeof LayoutStocksRouteImport
-      parentRoute: typeof LayoutRoute
+      fullPath: '/dashboard/stocks'
+      preLoaderRoute: typeof DashboardStocksRouteImport
+      parentRoute: typeof DashboardRoute
     }
-    '/_layout/settings': {
-      id: '/_layout/settings'
+    '/dashboard/settings': {
+      id: '/dashboard/settings'
       path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof LayoutSettingsRouteImport
-      parentRoute: typeof LayoutRoute
+      fullPath: '/dashboard/settings'
+      preLoaderRoute: typeof DashboardSettingsRouteImport
+      parentRoute: typeof DashboardRoute
     }
-    '/_layout/predictions': {
-      id: '/_layout/predictions'
+    '/dashboard/predictions': {
+      id: '/dashboard/predictions'
       path: '/predictions'
-      fullPath: '/predictions'
-      preLoaderRoute: typeof LayoutPredictionsRouteImport
-      parentRoute: typeof LayoutRoute
+      fullPath: '/dashboard/predictions'
+      preLoaderRoute: typeof DashboardPredictionsRouteImport
+      parentRoute: typeof DashboardRoute
     }
-    '/_layout/admin': {
-      id: '/_layout/admin'
+    '/dashboard/admin': {
+      id: '/dashboard/admin'
       path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof LayoutAdminRouteImport
-      parentRoute: typeof LayoutRoute
+      fullPath: '/dashboard/admin'
+      preLoaderRoute: typeof DashboardAdminRouteImport
+      parentRoute: typeof DashboardRoute
     }
-    '/_layout/stocks/$symbol': {
-      id: '/_layout/stocks/$symbol'
+    '/dashboard/stocks/$symbol': {
+      id: '/dashboard/stocks/$symbol'
       path: '/$symbol'
-      fullPath: '/stocks/$symbol'
-      preLoaderRoute: typeof LayoutStocksSymbolRouteImport
-      parentRoute: typeof LayoutStocksRoute
+      fullPath: '/dashboard/stocks/$symbol'
+      preLoaderRoute: typeof DashboardStocksSymbolRouteImport
+      parentRoute: typeof DashboardStocksRoute
     }
   }
 }
 
-interface LayoutStocksRouteChildren {
-  LayoutStocksSymbolRoute: typeof LayoutStocksSymbolRoute
+interface DashboardStocksRouteChildren {
+  DashboardStocksSymbolRoute: typeof DashboardStocksSymbolRoute
 }
 
-const LayoutStocksRouteChildren: LayoutStocksRouteChildren = {
-  LayoutStocksSymbolRoute: LayoutStocksSymbolRoute,
+const DashboardStocksRouteChildren: DashboardStocksRouteChildren = {
+  DashboardStocksSymbolRoute: DashboardStocksSymbolRoute,
 }
 
-const LayoutStocksRouteWithChildren = LayoutStocksRoute._addFileChildren(
-  LayoutStocksRouteChildren,
+const DashboardStocksRouteWithChildren = DashboardStocksRoute._addFileChildren(
+  DashboardStocksRouteChildren,
 )
 
-interface LayoutRouteChildren {
-  LayoutAdminRoute: typeof LayoutAdminRoute
-  LayoutPredictionsRoute: typeof LayoutPredictionsRoute
-  LayoutSettingsRoute: typeof LayoutSettingsRoute
-  LayoutStocksRoute: typeof LayoutStocksRouteWithChildren
-  LayoutIndexRoute: typeof LayoutIndexRoute
+interface DashboardRouteChildren {
+  DashboardAdminRoute: typeof DashboardAdminRoute
+  DashboardPredictionsRoute: typeof DashboardPredictionsRoute
+  DashboardSettingsRoute: typeof DashboardSettingsRoute
+  DashboardStocksRoute: typeof DashboardStocksRouteWithChildren
+  DashboardIndexRoute: typeof DashboardIndexRoute
 }
 
-const LayoutRouteChildren: LayoutRouteChildren = {
-  LayoutAdminRoute: LayoutAdminRoute,
-  LayoutPredictionsRoute: LayoutPredictionsRoute,
-  LayoutSettingsRoute: LayoutSettingsRoute,
-  LayoutStocksRoute: LayoutStocksRouteWithChildren,
-  LayoutIndexRoute: LayoutIndexRoute,
+const DashboardRouteChildren: DashboardRouteChildren = {
+  DashboardAdminRoute: DashboardAdminRoute,
+  DashboardPredictionsRoute: DashboardPredictionsRoute,
+  DashboardSettingsRoute: DashboardSettingsRoute,
+  DashboardStocksRoute: DashboardStocksRouteWithChildren,
+  DashboardIndexRoute: DashboardIndexRoute,
 }
 
-const LayoutRouteWithChildren =
-  LayoutRoute._addFileChildren(LayoutRouteChildren)
+const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
+  DashboardRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
-  LayoutRoute: LayoutRouteWithChildren,
-  LoginRoute: LoginRoute,
-  RecoverPasswordRoute: RecoverPasswordRoute,
-  ResetPasswordRoute: ResetPasswordRoute,
-  SignupRoute: SignupRoute,
+  IndexRoute: IndexRoute,
+  DashboardRoute: DashboardRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
