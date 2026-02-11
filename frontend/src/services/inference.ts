@@ -28,6 +28,6 @@ export class InferenceService {
   public static predict(
     requestBody: PredictionRequest,
   ): CancelablePromise<PredictionResponse> {
-    return this.predictStock(requestBody.symbol)
+    return InferenceService.predictStock(requestBody.symbol)
   }
 }

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
+import { ArrowRight, BarChart2, Calendar, Cpu, LineChart } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, BarChart2, LineChart, Cpu, Calendar } from "lucide-react"
 
 export const Route = createFileRoute("/")({
   component: Welcome,
@@ -20,7 +20,10 @@ function Welcome() {
         </h1>
 
         <p className="mb-8 max-w-[800px] text-lg text-muted-foreground lg:text-xl">
-          Unlock clearer insights into the financial markets with <strong>MarketSight</strong> — your all-in-one platform for analyzing historical market data, visualizing trends, and forecasting future price movements.
+          Unlock clearer insights into the financial markets with{" "}
+          <strong>MarketSight</strong> — your all-in-one platform for analyzing
+          historical market data, visualizing trends, and forecasting future
+          price movements.
         </p>
 
         <div className="flex gap-4">
@@ -40,7 +43,8 @@ function Welcome() {
             <LineChart className="mb-4 h-8 w-8 text-primary" />
             <h3 className="mb-2 text-lg font-bold">Historical Data</h3>
             <p className="text-muted-foreground">
-              Explore historical price data across stocks, indexes, and commodities with interactive charts.
+              Explore historical price data across stocks, indexes, and
+              commodities with interactive charts.
             </p>
           </div>
 
@@ -48,7 +52,8 @@ function Welcome() {
             <Cpu className="mb-4 h-8 w-8 text-primary" />
             <h3 className="mb-2 text-lg font-bold">AI Predictions</h3>
             <p className="text-muted-foreground">
-              See data-driven predictions overlaid with actual market behavior using our advanced models.
+              See data-driven predictions overlaid with actual market behavior
+              using our advanced models.
             </p>
           </div>
 
@@ -56,7 +61,8 @@ function Welcome() {
             <Calendar className="mb-4 h-8 w-8 text-primary" />
             <h3 className="mb-2 text-lg font-bold">Flexible Filtering</h3>
             <p className="text-muted-foreground">
-              Filter by date, exchange, and asset type with flexible controls to find exactly what you need.
+              Filter by date, exchange, and asset type with flexible controls to
+              find exactly what you need.
             </p>
           </div>
         </div>
@@ -66,7 +72,9 @@ function Welcome() {
       <footer className="border-t py-8 text-center text-sm text-muted-foreground">
         <div className="container flex flex-col items-center justify-between gap-4 md:flex-row">
           <p>© 2026 MarketSight. All rights reserved.</p>
-          <p>Powered by data. Made for analysts, investors, and curious minds.</p>
+          <p>
+            Powered by data. Made for analysts, investors, and curious minds.
+          </p>
         </div>
       </footer>
     </div>

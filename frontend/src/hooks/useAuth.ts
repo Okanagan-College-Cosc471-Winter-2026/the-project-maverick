@@ -22,14 +22,14 @@ const useAuth = () => {
 
   // No-op mutations since there's no real auth
   const signUpMutation = useMutation({
-    mutationFn: async () => { },
+    mutationFn: async () => {},
     onSuccess: () => {
       navigate({ to: "/dashboard" })
     },
   })
 
   const loginMutation = useMutation({
-    mutationFn: async () => { },
+    mutationFn: async () => {},
     onSuccess: () => {
       navigate({ to: "/dashboard" })
     },
