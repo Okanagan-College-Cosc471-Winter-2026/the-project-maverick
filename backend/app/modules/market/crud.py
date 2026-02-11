@@ -59,4 +59,3 @@ def get_ohlc(session: Session, symbol: str, days: int = 365) -> list[DailyPrice]
     # Get results and reverse to have oldest first
     results = list(session.scalars(stmt).all())
     return list(reversed(results))
-
