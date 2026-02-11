@@ -75,32 +75,33 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def get_feature_columns() -> list[str]:
     """
-    Get the exact list of feature columns used by the model.
+    Get the exact list of feature columns used by the global model.
     Must match the training feature order exactly.
     
     Returns:
-        List of 17 feature column names
+        List of 10 feature column names (ticker_id and hour are added separately)
     """
     return [
         'ret_1', 'ret_5', 'ret_10', 'ret_20',
-        'dist_sma_10', 'dist_sma_20', 'dist_sma_50',
-        'rsi', 'macd', 'macd_signal', 'macd_diff',
-        'bb_width', 'bb_position',
+        'dist_sma_10', 'dist_sma_50',
         'volatility_20',
+        'rsi',
         'vol_ratio',
-        'dayofweek', 'month'
+        'dayofweek'
     ]
 
 
-def prepare_features_for_prediction(df: pd.DataFrame) -> pd.DataFrame:
+def prepare_features_for_prediction(df: pd.DataFrame, symbol: str, ticker_encoder) -> pd.DataFrame:
     """
     Prepare features for a single prediction.
     
     Args:
         df: DataFrame with recent OHLCV data (at least 60 rows for indicators)
+        symbol: Stock symbol (e.g., 'AAPL')
+        ticker_encoder: LabelEncoder for converting symbols to IDs
         
     Returns:
-        DataFrame with features for the most recent data point
+        DataFrame with features for the most recent data point (12 features total)
     """
     # Calculate all indicators
     df_with_features = calculate_technical_indicators(df)
@@ -114,5 +115,14 @@ def prepare_features_for_prediction(df: pd.DataFrame) -> pd.DataFrame:
     # Get only the feature columns in the correct order
     feature_cols = get_feature_columns()
     
-    # Return only the most recent row with features
-    return df_with_features[feature_cols].iloc[[-1]]
+    # Get the most recent row with features
+    latest_features = df_with_features[feature_cols].iloc[[-1]].copy()
+    
+    # Add ticker_id (encoded symbol) as first column
+    ticker_id = ticker_encoder.transform([symbol])[0]
+    latest_features.insert(0, 'ticker_id', ticker_id)
+    
+    # Add hour feature (0 for daily data, since we don't have intraday timestamps)
+    latest_features.insert(1, 'hour', 0)
+    
+    return latest_features

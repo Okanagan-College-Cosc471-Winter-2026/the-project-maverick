@@ -5,6 +5,7 @@ Implements singleton pattern to load model once on startup.
 """
 
 import json
+import joblib
 from pathlib import Path
 from typing import ClassVar
 
@@ -22,6 +23,7 @@ class ModelManager:
     _model: XGBRegressor | None = None
     _feature_names: list[str] | None = None
     _metadata: dict | None = None
+    _ticker_encoder = None
     _model_path: Path
     
     def __new__(cls) -> "ModelManager":
@@ -44,6 +46,7 @@ class ModelManager:
         model_file = self._model_path / "model.json"
         feature_file = self._model_path / "feature_names.json"
         metadata_file = self._model_path / "metadata.json"
+        encoder_file = self._model_path / "ticker_encoder.joblib"
         
         # Check if files exist
         if not model_file.exists():
@@ -61,10 +64,16 @@ class ModelManager:
         with open(metadata_file) as f:
             self._metadata = json.load(f)
         
+        # Load ticker encoder
+        if encoder_file.exists():
+            self._ticker_encoder = joblib.load(encoder_file)
+        
         print(f"✓ Loaded XGBoost model from {model_file}")
         print(f"  - Features: {len(self._feature_names)}")
         print(f"  - Prediction horizon: {self._metadata.get('prediction_horizon')} bars")
         print(f"  - Training date: {self._metadata.get('training_date')}")
+        if self._ticker_encoder is not None:
+            print(f"  - Ticker encoder loaded with {len(self._ticker_encoder.classes_)} symbols")
     
     @property
     def model(self) -> XGBRegressor:
@@ -89,6 +98,13 @@ class ModelManager:
             self.load_model()
         assert self._metadata is not None
         return self._metadata
+    
+    @property
+    def ticker_encoder(self):
+        """Get the ticker encoder."""
+        if self._ticker_encoder is None:
+            self.load_model()
+        return self._ticker_encoder
 
 
 # Global instance

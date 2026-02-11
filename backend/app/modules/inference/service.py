@@ -59,7 +59,10 @@ class InferenceService:
         
         # 4. Prepare features
         try:
-            features = prepare_features_for_prediction(df)
+            ticker_encoder = model_manager.ticker_encoder
+            if ticker_encoder is None:
+                raise ValueError("Ticker encoder not loaded")
+            features = prepare_features_for_prediction(df, symbol, ticker_encoder)
         except Exception as e:
             raise ValueError(f"Error calculating features: {str(e)}")
         
