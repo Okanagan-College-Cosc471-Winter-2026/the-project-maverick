@@ -45,8 +45,7 @@ class Settings(BaseSettings):
             self.FRONTEND_HOST
         ]
 
-    PROJECT_NAME: str
-    SENTRY_DSN: HttpUrl | None = None
+    PROJECT_NAME: str = "MarketSight"
     POSTGRES_SERVER: str
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str

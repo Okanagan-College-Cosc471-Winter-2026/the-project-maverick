@@ -17,7 +17,7 @@ export const Route = createFileRoute("/dashboard/settings")({
   head: () => ({
     meta: [
       {
-        title: "Settings - FastAPI Cloud",
+        title: "Settings - MarketSight Cloud",
       },
     ],
   }),
