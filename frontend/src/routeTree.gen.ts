@@ -15,9 +15,11 @@ import { Route as RecoverPasswordRouteImport } from './routes/recover-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
+import { Route as LayoutStocksRouteImport } from './routes/_layout/stocks'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
-import { Route as LayoutItemsRouteImport } from './routes/_layout/items'
+import { Route as LayoutPredictionsRouteImport } from './routes/_layout/predictions'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
+import { Route as LayoutStocksSymbolRouteImport } from './routes/_layout/stocks.$symbol'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -48,14 +50,19 @@ const LayoutIndexRoute = LayoutIndexRouteImport.update({
   path: '/',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutStocksRoute = LayoutStocksRouteImport.update({
+  id: '/stocks',
+  path: '/stocks',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutSettingsRoute = LayoutSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => LayoutRoute,
 } as any)
-const LayoutItemsRoute = LayoutItemsRouteImport.update({
-  id: '/items',
-  path: '/items',
+const LayoutPredictionsRoute = LayoutPredictionsRouteImport.update({
+  id: '/predictions',
+  path: '/predictions',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutAdminRoute = LayoutAdminRouteImport.update({
@@ -63,16 +70,23 @@ const LayoutAdminRoute = LayoutAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutStocksSymbolRoute = LayoutStocksSymbolRouteImport.update({
+  id: '/$symbol',
+  path: '/$symbol',
+  getParentRoute: () => LayoutStocksRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
+  '/': typeof LayoutIndexRoute
   '/login': typeof LoginRoute
   '/recover-password': typeof RecoverPasswordRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
-  '/items': typeof LayoutItemsRoute
+  '/predictions': typeof LayoutPredictionsRoute
   '/settings': typeof LayoutSettingsRoute
-  '/': typeof LayoutIndexRoute
+  '/stocks': typeof LayoutStocksRouteWithChildren
+  '/stocks/$symbol': typeof LayoutStocksSymbolRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -80,9 +94,11 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
-  '/items': typeof LayoutItemsRoute
+  '/predictions': typeof LayoutPredictionsRoute
   '/settings': typeof LayoutSettingsRoute
+  '/stocks': typeof LayoutStocksRouteWithChildren
   '/': typeof LayoutIndexRoute
+  '/stocks/$symbol': typeof LayoutStocksSymbolRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -92,21 +108,25 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/_layout/admin': typeof LayoutAdminRoute
-  '/_layout/items': typeof LayoutItemsRoute
+  '/_layout/predictions': typeof LayoutPredictionsRoute
   '/_layout/settings': typeof LayoutSettingsRoute
+  '/_layout/stocks': typeof LayoutStocksRouteWithChildren
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/stocks/$symbol': typeof LayoutStocksSymbolRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/'
     | '/login'
     | '/recover-password'
     | '/reset-password'
     | '/signup'
     | '/admin'
-    | '/items'
+    | '/predictions'
     | '/settings'
-    | '/'
+    | '/stocks'
+    | '/stocks/$symbol'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -114,9 +134,11 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/admin'
-    | '/items'
+    | '/predictions'
     | '/settings'
+    | '/stocks'
     | '/'
+    | '/stocks/$symbol'
   id:
     | '__root__'
     | '/_layout'
@@ -125,9 +147,11 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/_layout/admin'
-    | '/_layout/items'
+    | '/_layout/predictions'
     | '/_layout/settings'
+    | '/_layout/stocks'
     | '/_layout/'
+    | '/_layout/stocks/$symbol'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -171,7 +195,7 @@ declare module '@tanstack/react-router' {
     '/_layout': {
       id: '/_layout'
       path: ''
-      fullPath: ''
+      fullPath: '/'
       preLoaderRoute: typeof LayoutRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -182,6 +206,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/stocks': {
+      id: '/_layout/stocks'
+      path: '/stocks'
+      fullPath: '/stocks'
+      preLoaderRoute: typeof LayoutStocksRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/settings': {
       id: '/_layout/settings'
       path: '/settings'
@@ -189,11 +220,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutSettingsRouteImport
       parentRoute: typeof LayoutRoute
     }
-    '/_layout/items': {
-      id: '/_layout/items'
-      path: '/items'
-      fullPath: '/items'
-      preLoaderRoute: typeof LayoutItemsRouteImport
+    '/_layout/predictions': {
+      id: '/_layout/predictions'
+      path: '/predictions'
+      fullPath: '/predictions'
+      preLoaderRoute: typeof LayoutPredictionsRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/admin': {
@@ -203,20 +234,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAdminRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/stocks/$symbol': {
+      id: '/_layout/stocks/$symbol'
+      path: '/$symbol'
+      fullPath: '/stocks/$symbol'
+      preLoaderRoute: typeof LayoutStocksSymbolRouteImport
+      parentRoute: typeof LayoutStocksRoute
+    }
   }
 }
 
+interface LayoutStocksRouteChildren {
+  LayoutStocksSymbolRoute: typeof LayoutStocksSymbolRoute
+}
+
+const LayoutStocksRouteChildren: LayoutStocksRouteChildren = {
+  LayoutStocksSymbolRoute: LayoutStocksSymbolRoute,
+}
+
+const LayoutStocksRouteWithChildren = LayoutStocksRoute._addFileChildren(
+  LayoutStocksRouteChildren,
+)
+
 interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
-  LayoutItemsRoute: typeof LayoutItemsRoute
+  LayoutPredictionsRoute: typeof LayoutPredictionsRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
+  LayoutStocksRoute: typeof LayoutStocksRouteWithChildren
   LayoutIndexRoute: typeof LayoutIndexRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAdminRoute: LayoutAdminRoute,
-  LayoutItemsRoute: LayoutItemsRoute,
+  LayoutPredictionsRoute: LayoutPredictionsRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
+  LayoutStocksRoute: LayoutStocksRouteWithChildren,
   LayoutIndexRoute: LayoutIndexRoute,
 }
 
