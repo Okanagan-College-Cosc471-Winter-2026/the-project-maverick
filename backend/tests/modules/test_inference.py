@@ -1,5 +1,5 @@
-from datetime import datetime
 from fastapi.testclient import TestClient
+
 
 def test_predict_stock_price(client: TestClient) -> None:
     # Note: Requires DB data which might not be present in unit test environment

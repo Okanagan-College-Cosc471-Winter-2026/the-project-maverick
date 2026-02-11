@@ -1,9 +1,11 @@
-import pytest
 from datetime import date, timedelta
-from sqlalchemy.orm import Session
-from sqlalchemy import text
 
-from app.modules.market.models import Stock, DailyPrice
+import pytest
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from app.modules.market.models import DailyPrice, Stock
+
 
 @pytest.fixture(scope="function")
 def market_data(db: Session):
@@ -19,35 +21,35 @@ def market_data(db: Session):
     # 2. Seed Stocks
     stocks = [
         Stock(
-            symbol="AAPL", 
-            name="Apple Inc.", 
-            sector="Technology", 
+            symbol="AAPL",
+            name="Apple Inc.",
+            sector="Technology",
             industry="Consumer Electronics",
             exchange="NASDAQ",
             is_active=True
         ),
         Stock(
-            symbol="GOOGL", 
-            name="Alphabet Inc.", 
-            sector="Technology", 
+            symbol="GOOGL",
+            name="Alphabet Inc.",
+            sector="Technology",
             industry="Internet Content & Information",
             exchange="NASDAQ",
             is_active=True
         ),
         Stock(
-            symbol="TSLA", 
-            name="Tesla Inc.", 
-            sector="Consumer Cyclical", 
+            symbol="TSLA",
+            name="Tesla Inc.",
+            sector="Consumer Cyclical",
             industry="Auto Manufacturers",
-            exchange="NASDAQ", 
+            exchange="NASDAQ",
             is_active=True
         ),
         Stock(
-            symbol="INACT", 
-            name="Inactive Corp", 
-            sector="N/A", 
+            symbol="INACT",
+            name="Inactive Corp",
+            sector="N/A",
             industry="N/A",
-            exchange="N/A", 
+            exchange="N/A",
             is_active=False
         ),
     ]
