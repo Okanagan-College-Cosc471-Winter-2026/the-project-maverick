@@ -29,9 +29,9 @@ warnings.filterwarnings('ignore')
 DB_CONFIG = {
     'host': 'localhost',
     'port': 5432,
-    'database': 'market_data',
-    'user': 'mluser',
-    'password': 'mlpassword'
+    'database': 'app',
+    'user': 'postgres',
+    'password': 'changethis'
 }
 
 OUTPUT_DIR = './model_artifacts_global'
@@ -47,21 +47,21 @@ def get_db_engine():
     connection_string = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
     return create_engine(connection_string)
 
-def get_all_tables(engine):
-    """Get list of all stock tables in the market schema."""
-    query = """
-    SELECT table_name 
-    FROM information_schema.tables 
-    WHERE table_schema = 'market' 
-    ORDER BY table_name
-    """
+def get_all_stocks(engine):
+    """Get list of all stock symbols from the unified stocks table."""
+    query = "SELECT symbol FROM market.stocks WHERE is_active = true ORDER BY symbol"
     with engine.connect() as conn:
         result = pd.read_sql(query, conn)
-    return result['table_name'].tolist()
+    return result['symbol'].tolist()
 
-def load_stock_data(engine, ticker):
-    """Load stock data from PostgreSQL."""
-    query = f'SELECT date, open, high, low, close, volume FROM market."{ticker}" ORDER BY date'
+def load_stock_data(engine, symbol):
+    """Load stock data from the unified daily_prices table."""
+    query = f"""
+        SELECT date, open, high, low, close, volume, previous_close, change, change_pct
+        FROM market.daily_prices 
+        WHERE symbol = '{symbol}'
+        ORDER BY date
+    """
     with engine.connect() as conn:
         df = pd.read_sql(query, conn)
     return df
@@ -139,47 +139,43 @@ def main():
     start_time = time.time()
     
     engine = get_db_engine()
-    tables = get_all_tables(engine)
-
-    # Filter out known non-stock tables (metadata/test tables)
-    exclude_tables = {'abcde', 'modelfeatures', 'sectors', 'stock_metadata'} 
-    tables = [t for t in tables if t not in exclude_tables]
+    symbols = get_all_stocks(engine)
     
-    print(f"Found {len(tables)} stocks in database (filtered metadata tables).")
+    print(f"Found {len(symbols)} active stocks in database: {', '.join(symbols)}")
     
     # 1. Data Ingestion & Processing
     all_X = []
     all_y = []
     all_dates = []
     
-    # Label Encoder for Tickers (mapped to integers)
+    # Label Encoder for Symbols (mapped to integers)
     le = LabelEncoder()
-    le.fit(tables)
+    le.fit(symbols)
     joblib.dump(le, f"{OUTPUT_DIR}/ticker_encoder.joblib")
     
     # We load stocks in batches to monitor progress
     print("Processing stocks...")
-    for i, ticker in enumerate(tables):
+    for i, symbol in enumerate(symbols):
         try:
             # Load raw
-            df_raw = load_stock_data(engine, ticker)
+            df_raw = load_stock_data(engine, symbol)
             
-            # Encode ticker string to int
-            tid = le.transform([ticker])[0]
+            # Encode symbol string to int
+            sid = le.transform([symbol])[0]
             
             # Featurize
-            X, y, dates = create_features(df_raw, tid)
+            X, y, dates = create_features(df_raw, sid)
             
             # Append to lists (efficient memory collection)
             all_X.append(X)
             all_y.append(y)
             all_dates.append(dates)
             
-            if (i + 1) % 10 == 0:
-                print(f"Processed {i + 1}/{len(tables)} stocks...")
+            if (i + 1) % 5 == 0:
+                print(f"Processed {i + 1}/{len(symbols)} stocks...")
                 
         except Exception as e:
-            print(f"Error processing {ticker}: {e}")
+            print(f"Error processing {symbol}: {e}")
             continue
 
     print("Concatenating datasets...")
