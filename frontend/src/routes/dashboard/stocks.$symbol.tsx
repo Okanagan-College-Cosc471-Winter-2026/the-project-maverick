@@ -103,6 +103,7 @@ function ChartTab({ symbol }: { symbol: string }) {
       setLoadingPrediction(true)
       try {
         const result = await InferenceService.predictStock(symbol)
+        setTimeRange('1W')
         setPrediction(result)
       } catch (error) {
         console.error('Failed to load prediction:', error)
