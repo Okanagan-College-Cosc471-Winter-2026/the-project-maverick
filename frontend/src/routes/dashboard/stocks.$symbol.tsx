@@ -55,12 +55,35 @@ function ChartTab({ symbol }: { symbol: string }) {
   const { data: ohlc } = useSuspenseQuery(ohlcQueryOptions(symbol))
   const { data: stock } = useSuspenseQuery(stockQueryOptions(symbol))
   const [showPrediction, setShowPrediction] = useState(false)
-  const [chartType, setChartType] = useState<ChartType>('candlestick')
+  const [chartType, setChartType] = useState<ChartType>('line')
   const [prediction, setPrediction] = useState<any>(null)
   const [loadingPrediction, setLoadingPrediction] = useState(false)
+  const [timeRange, setTimeRange] = useState<'1D' | '1W' | '1M' | 'ALL'>('ALL')
+
+  // Filter data based on time range
+  const getFilteredData = () => {
+    const now = Date.now() / 1000 // Current time in Unix timestamp
+    const oneDayAgo = now - (24 * 60 * 60)
+    const oneWeekAgo = now - (7 * 24 * 60 * 60)
+    const onMonthAgo = now - (30 * 24 * 60 * 60)
+
+    switch (timeRange) {
+      case '1D':
+        return ohlc.filter(item => item.time >= oneDayAgo)
+      case '1W':
+        return ohlc.filter(item => item.time >= oneWeekAgo)
+      case '1M':
+        return ohlc.filter(item => item.time >= onMonthAgo)
+      case 'ALL':
+      default:
+        return ohlc
+    }
+  }
+
+  const filteredOhlc = getFilteredData()
 
   // Prepare data for chart
-  const chartData = ohlc.map((item) => ({
+  const chartData = filteredOhlc.map((item) => ({
     time: item.time as any,
     open: item.open,
     high: item.high,
@@ -148,6 +171,41 @@ function ChartTab({ symbol }: { symbol: string }) {
                   onClick={() => setChartType('line')}
                 >
                   <LineChart className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant={timeRange === '1D' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTimeRange('1D')}
+                  className="text-xs px-2"
+                >
+                  1D
+                </Button>
+                <Button
+                  variant={timeRange === '1W' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTimeRange('1W')}
+                  className="text-xs px-2"
+                >
+                  1W
+                </Button>
+                <Button
+                 variant={timeRange === '1M' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTimeRange('1M')}
+                  className="text-xs px-2"
+                >
+                  1M
+                </Button>
+                  
+                <Button
+                  variant={timeRange === 'ALL' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTimeRange('ALL')}
+                  className="text-xs px-2"
+                >
+                  All
                 </Button>
               </div>
               <div className="flex items-center space-x-2">
