@@ -1,4 +1,4 @@
-import { createChart, ColorType, IChartApi } from 'lightweight-charts';
+import { createChart, ColorType, IChartApi, CandlestickSeries } from 'lightweight-charts';
 import { useEffect, useRef } from 'react';
 
 export const StockChart = (props: {
@@ -49,7 +49,7 @@ export const StockChart = (props: {
 
         chart.timeScale().fitContent();
 
-        const newSeries = (chart as any).addCandlestickSeries({
+        const newSeries = chart.addSeries(CandlestickSeries, {
             upColor: '#26a69a',
             downColor: '#ef5350',
             borderVisible: false,

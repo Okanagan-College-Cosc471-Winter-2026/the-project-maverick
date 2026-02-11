@@ -12,7 +12,6 @@ import { ohlcQueryOptions, stockQueryOptions } from "@/hooks/useMarket"
 import { StockChart } from "@/components/Charts/StockChart"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Activity, DollarSign } from "lucide-react"
 
 export const Route = createFileRoute("/dashboard/stocks/$symbol")({
   component: StockDetail,
@@ -53,6 +52,7 @@ function StockHeader({ symbol }: { symbol: string }) {
 
 function ChartTab({ symbol }: { symbol: string }) {
   const { data: ohlc } = useSuspenseQuery(ohlcQueryOptions(symbol))
+  const { data: stock } = useSuspenseQuery(stockQueryOptions(symbol))
   const [showPrediction, setShowPrediction] = useState(false)
 
   // Prepare data for chart
@@ -64,27 +64,57 @@ function ChartTab({ symbol }: { symbol: string }) {
     close: item.close,
   }))
 
+  const lastPrice = ohlc[ohlc.length - 1]?.close || 0
+  const previousPrice = ohlc[ohlc.length - 2]?.close || 0
+  const priceChange = lastPrice - previousPrice
+  const priceChangePercent = (priceChange / previousPrice) * 100
+
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Price History</CardTitle>
-            <CardDescription>Historical OHLC data for {symbol}</CardDescription>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <CardTitle className="text-xl mb-1">
+              {stock.name} ({stock.symbol})
+            </CardTitle>
+            <CardDescription>Historical OHLC data</CardDescription>
           </div>
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="prediction-mode"
-              checked={showPrediction}
-              onCheckedChange={setShowPrediction}
-              disabled={true}
-            />
-            <Label htmlFor="prediction-mode">Show Prediction (Coming Soon)</Label>
+
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-xs text-muted-foreground">Current Price</div>
+              <div className="text-lg font-bold">${lastPrice.toFixed(2)}</div>
+              <div className={`text-xs ${priceChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)} ({priceChangePercent.toFixed(2)}%)
+              </div>
+            </div>
+
+            <div className="h-10 w-px bg-border" />
+
+            <div className="text-right">
+              <div className="text-xs text-muted-foreground">Volume</div>
+              <div className="text-lg font-bold">{(ohlc[ohlc.length - 1]?.volume ?? 0).toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">Latest trading</div>
+            </div>
+
+            <div className="h-10 w-px bg-border" />
+
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="prediction-mode"
+                checked={showPrediction}
+                onCheckedChange={setShowPrediction}
+                disabled={true}
+              />
+              <Label htmlFor="prediction-mode" className="text-xs whitespace-nowrap">
+                Show Prediction
+              </Label>
+            </div>
           </div>
         </div>
       </CardHeader>
       <CardContent className="pl-2">
-        <div className="h-[400px] w-full">
+        <div className="h-[500px] w-full">
           <StockChart data={chartData} />
         </div>
       </CardContent>
@@ -139,12 +169,6 @@ function LoadingFallback() {
 
 function StockDetail() {
   const { symbol } = Route.useParams()
-  const { data: ohlcData } = useSuspenseQuery(ohlcQueryOptions(symbol))
-
-  const lastPrice = ohlcData[ohlcData.length - 1]?.close || 0
-  const previousPrice = ohlcData[ohlcData.length - 2]?.close || 0
-  const priceChange = lastPrice - previousPrice
-  const priceChangePercent = (priceChange / previousPrice) * 100
 
   return (
     <div className="flex flex-col gap-6">
@@ -157,31 +181,6 @@ function StockDetail() {
         <Suspense fallback={<Skeleton className="h-10 w-64" />}>
           <StockHeader symbol={symbol} />
         </Suspense>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Current Price</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${lastPrice.toFixed(2)}</div>
-            <p className={`text-xs ${priceChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-              {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)} ({priceChangePercent.toFixed(2)}%)
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Volume</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{(ohlcData[ohlcData.length - 1]?.volume ?? 0).toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Latest trading volume</p>
-          </CardContent>
-        </Card>
       </div>
 
       <Tabs defaultValue="chart">
@@ -207,4 +206,3 @@ function StockDetail() {
     </div>
   )
 }
-
