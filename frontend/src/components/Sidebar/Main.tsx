@@ -44,9 +44,10 @@ export function Main({ items }: MainProps) {
                   tooltip={item.title}
                   isActive={isActive}
                   asChild
+                  className="text-base"
                 >
                   <RouterLink to={item.path} onClick={handleMenuClick}>
-                    <item.icon />
+                    <item.icon className="h-5 w-5" />
                     <span>{item.title}</span>
                   </RouterLink>
                 </SidebarMenuButton>

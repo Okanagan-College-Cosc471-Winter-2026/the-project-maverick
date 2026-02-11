@@ -338,11 +338,13 @@ cd backend
 # Install dependencies (creates .venv automatically)
 uv sync
 
+
+
 # Run database migrations
-uv run alembic upgrade head
+# uv run alembic upgrade head
 
 # Start development server with auto-reload
-uv run MarketSight dev app/main.py
+uv run fastapi dev app/main.py --host 0.0.0.0 --port 8000
 ```
 
 You can also activate the virtual environment manually if you prefer:

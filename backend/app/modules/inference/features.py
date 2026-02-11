@@ -6,16 +6,15 @@ to work with pandas DataFrames in the backend.
 """
 
 import pandas as pd
-import numpy as np
 
 
 def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     Calculate all technical indicators needed for model inference.
-    
+
     Args:
         df: DataFrame with columns: date, open, high, low, close, volume
-        
+
     Returns:
         DataFrame with all 17 features required by the model
     """
@@ -77,7 +76,7 @@ def get_feature_columns() -> list[str]:
     """
     Get the exact list of feature columns used by the global model.
     Must match the training feature order exactly.
-    
+
     Returns:
         List of 10 feature column names (ticker_id and hour are added separately)
     """
@@ -94,12 +93,12 @@ def get_feature_columns() -> list[str]:
 def prepare_features_for_prediction(df: pd.DataFrame, symbol: str, ticker_encoder) -> pd.DataFrame:
     """
     Prepare features for a single prediction.
-    
+
     Args:
         df: DataFrame with recent OHLCV data (at least 60 rows for indicators)
         symbol: Stock symbol (e.g., 'AAPL')
         ticker_encoder: LabelEncoder for converting symbols to IDs
-        
+
     Returns:
         DataFrame with features for the most recent data point (12 features total)
     """
