@@ -36,3 +36,27 @@ def get_daily_prices(
         .order_by(DailyPrice.date)
     )
     return list(session.scalars(stmt).all())
+
+
+def get_ohlc(session: Session, symbol: str, days: int = 365) -> list[DailyPrice]:
+    """
+    Return recent OHLC data for a symbol.
+    
+    Args:
+        session: Database session
+        symbol: Stock symbol
+        days: Number of days of history to retrieve (default 365)
+        
+    Returns:
+        List of DailyPrice records, ordered by date ascending
+    """
+    stmt = (
+        select(DailyPrice)
+        .where(DailyPrice.symbol == symbol.upper())
+        .order_by(DailyPrice.date.desc())
+        .limit(days * 30)  # Approximate: 30 bars per day for 15-min data
+    )
+    # Get results and reverse to have oldest first
+    results = list(session.scalars(stmt).all())
+    return list(reversed(results))
+
