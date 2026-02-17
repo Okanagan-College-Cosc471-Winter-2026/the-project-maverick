@@ -3,8 +3,9 @@ services:
     image: postgres:17
     container_name: ml-postgres
     restart: unless-stopped
+    command: [ "postgres", "-c", "listen_addresses=*" ]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mluser} -d ${POSTGRES_DB:-market_data}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mluser} -d ${POSTGRES_DB:-market_data}" ]
       interval: 10s
       retries: 5
       start_period: 30s
