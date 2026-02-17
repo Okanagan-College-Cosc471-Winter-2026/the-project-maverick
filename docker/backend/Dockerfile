@@ -6,6 +6,10 @@ ENV PYTHONUNBUFFERED=1
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 
+# Install curl for health check
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Install dependencies (cached layer)
@@ -16,6 +20,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Copy application code
 COPY backend/app /app/app
 COPY backend/scripts /app/scripts
+COPY backend/alembic.ini /app/alembic.ini
 
 # Set python path
 ENV PYTHONPATH=/app
