@@ -61,8 +61,8 @@ services:
       dockerfile: docker/backend/Dockerfile
     image: backend
     restart: always
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     depends_on:
       db:
         condition: service_healthy
@@ -94,7 +94,7 @@ services:
       context: .
       dockerfile: docker/frontend/Dockerfile
       args:
-        - VITE_API_URL=http://localhost:8000
+        - VITE_API_URL=
         - NODE_ENV=development
     image: frontend
     restart: always
