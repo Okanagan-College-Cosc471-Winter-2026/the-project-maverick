@@ -27,7 +27,7 @@ warnings.filterwarnings('ignore')
 
 # ===== CONFIGURATION =====
 DB_CONFIG = {
-    'host': 'localhost',
+    'host': '10.12.43.135',
     'port': 5432,
     'database': 'app',
     'user': 'postgres',

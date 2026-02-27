@@ -22,6 +22,7 @@ from sqlalchemy import create_engine, text
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from xgboost import XGBRegressor
 import joblib
+from dotenv import load_dotenv
 
 # Add parent directory to path to import features module
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -29,15 +30,18 @@ from features.technical_indicators import create_all_features, get_feature_colum
 
 warnings.filterwarnings('ignore')
 
+# Load environment variables
+load_dotenv()
+
 # ===== CONFIGURATION =====
 
 # Database configuration
 DB_CONFIG = {
     'host': os.getenv('POSTGRES_SERVER', 'localhost'),
     'port': int(os.getenv('POSTGRES_PORT', 5432)),
-    'database': os.getenv('POSTGRES_DB', 'app'),
-    'user': os.getenv('POSTGRES_USER', 'postgres'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'changethis')
+    'database': os.getenv('POSTGRES_DB', 'market_data'),
+    'user': os.getenv('POSTGRES_USER', 'mluser'),
+    'password': os.getenv('POSTGRES_PASSWORD', 'mlpassword')
 }
 
 # Model configuration
