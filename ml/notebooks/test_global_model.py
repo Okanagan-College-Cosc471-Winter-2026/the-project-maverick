@@ -40,9 +40,6 @@ DB_CONFIG = {
     'password': 'mlpassword'
 }
 
-# TEST MODE: Only use a few stocks
-TEST_STOCKS = ['aapl', 'msft', 'googl', 'amzn', 'tsla']  # 5 stocks for testing
-
 PREDICTION_HORIZON = 60  # 5 hours ahead (60 * 5min)
 
 # ## Database Functions
@@ -156,20 +153,26 @@ def create_features(df, ticker_id):
     
     return df[feature_cols], df['target'], df['date']
 
-# ## Load Test Data (5 stocks)
+# ## Load All Stocks
 
 # In[5]:
 
 
+# Fetch all available symbols from DB
+with engine.connect() as conn:
+    all_symbols = pd.read_sql("SELECT DISTINCT symbol FROM stg_transform.market_data ORDER BY symbol", conn)['symbol'].tolist()
+
+print(f"Found {len(all_symbols)} symbols: {all_symbols}")
+
 # Label Encoder
 le = LabelEncoder()
-le.fit(TEST_STOCKS)
+le.fit(all_symbols)
 
 all_X = []
 all_y = []
 all_dates = []
 
-for ticker in TEST_STOCKS:
+for ticker in all_symbols:
     print(f"Loading {ticker}...")
     df_raw = load_stock_data(engine, ticker)
     print(f"  Raw rows: {len(df_raw)}")

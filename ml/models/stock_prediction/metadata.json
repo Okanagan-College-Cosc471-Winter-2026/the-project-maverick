@@ -1,5 +1,5 @@
 {
-  "training_date": "2026-02-11T06:57:33.999465",
+  "training_date": "2026-02-27T01:37:48.533772",
   "model_type": "XGBoost Regressor",
   "prediction_horizon": 26,
   "hyperparameters": {
@@ -14,9 +14,9 @@
     "tree_method": "hist"
   },
   "metrics": {
-    "rmse": 0.11398600312467118,
-    "mae": 0.09179126075028589,
-    "directional_accuracy": 0.35658914728682173
+    "rmse": 0.01293652112088876,
+    "mae": 0.007758793153796248,
+    "directional_accuracy": 0.5126764878596778
   },
   "feature_count": 17
 }

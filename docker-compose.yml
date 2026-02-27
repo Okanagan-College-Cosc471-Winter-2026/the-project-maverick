@@ -11,8 +11,6 @@ services:
     volumes:
       - app-db-data:/var/lib/postgresql/data/pgdata
       - ./airflow/config/init-airflow-db.sql:/docker-entrypoint-initdb.d/init-airflow-db.sql:ro
-    ports:
-      - "5432:5432"
     env_file:
       - .env
     environment:
