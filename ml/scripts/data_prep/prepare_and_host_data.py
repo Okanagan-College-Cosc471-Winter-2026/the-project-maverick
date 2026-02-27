@@ -10,7 +10,7 @@ def process_and_merge_data():
     Merges 2020-2023 (FMP) and 2023-2025 (Drive) data into single Parquet files per ticker.
     """
     fmp_dir = "/home/cosc-admin/the-project-maverick/ml/data/fmp_historical_5min"
-    drive_dir = "/home/cosc-admin/the-project-maverick/ml/data/29-stocks-5-min"
+    drive_dir = "/home/cosc-admin/the-project-maverick/ml/data/dm_historical"
     output_dir = "/home/cosc-admin/the-project-maverick/ml/data/processed_parquet"
     
     os.makedirs(output_dir, exist_ok=True)
