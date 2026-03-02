@@ -1,7 +1,7 @@
 import requests
 import pandas as pd
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import time
 
@@ -23,44 +23,65 @@ OUTPUT_DIR = "/home/cosc-admin/the-project-maverick/ml/data/fmp_historical_5min"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def download_fmp_data(ticker, start_date, end_date):
-    """Download 5-minute data from FMP API."""
-    print(f"Downloading historical data for {ticker}...")
+    """Download 5-minute data from FMP API in chunks."""
+    print(f"Downloading historical data for {ticker} from {start_date} to {end_date}...")
     
-    # FMP has a limit on how much data can be returned in a single call for intraday
-    # We might need to split this into chunks if FMP restricts the date range per API call
-    url = f"https://financialmodelingprep.com/api/v3/historical-chart/5min/{ticker}?from={start_date}&to={end_date}&apikey={FMP_API_KEY}"
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date)
     
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        
-        if not data:
-            print(f"No data returned for {ticker}")
-            return False
+    all_data = []
+    current_start = start_dt
+    
+    while current_start <= end_dt:
+        current_end = current_start + timedelta(days=25)
+        if current_end > end_dt:
+            current_end = end_dt
             
-        df = pd.DataFrame(data)
-        # Ensure column names match our existing data
-        df = df.rename(columns={"date": "date", "open": "open", "low": "low", "high": "high", "close": "close", "volume": "volume"})
+        str_start = current_start.strftime("%Y-%m-%d")
+        str_end = current_end.strftime("%Y-%m-%d")
         
-        # We only need specific columns
-        df = df[['date', 'open', 'low', 'high', 'close', 'volume']]
+        print(f"  Fetching {str_start} to {str_end}")
         
-        # Sort by date ascending (oldest to newest)
-        df['date'] = pd.to_datetime(df['date'])
-        df = df.sort_values('date')
+        url = f"https://financialmodelingprep.com/api/v3/historical-chart/5min/{ticker}?from={str_start}&to={str_end}&apikey={FMP_API_KEY}"
         
-        output_file = os.path.join(OUTPUT_DIR, f"{ticker}.csv")
-        df.to_csv(output_file, index=False)
-        print(f"Saved {len(df)} rows to {output_file}")
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data:
+                df = pd.DataFrame(data)
+                df = df.rename(columns={"date": "date", "open": "open", "low": "low", "high": "high", "close": "close", "volume": "volume"})
+                df = df[['date', 'open', 'low', 'high', 'close', 'volume']]
+                all_data.append(df)
+            else:
+                pass
+            
+            # Be nice to the API
+            time.sleep(0.5)
+            
+        except requests.exceptions.RequestException as e:
+            print(f"  Error downloading chunk: {e}")
+            
+        if current_end == end_dt:
+            break
+            
+        current_start = current_end + timedelta(days=1)
         
-        # Be nice to the API
-        time.sleep(1)
-        return True
-        
-    except requests.exceptions.RequestException as e:
-        print(f"Error downloading data for {ticker}: {e}")
+    if not all_data:
+        print(f"No data returned for {ticker} across all chunks")
         return False
+        
+    final_df = pd.concat(all_data, ignore_index=True)
+    
+    # Sort by date ascending (oldest to newest)
+    final_df['date'] = pd.to_datetime(final_df['date'])
+    final_df = final_df.sort_values('date').drop_duplicates(subset=['date'])
+    
+    output_file = os.path.join(OUTPUT_DIR, f"{ticker}.csv")
+    final_df.to_csv(output_file, index=False)
+    print(f"Saved {len(final_df)} total rows to {output_file}")
+    return True
 
 def main():
     success_count = 0
