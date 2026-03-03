@@ -37,6 +37,7 @@ const STATUS_DOT: Record<string, string> = {
 }
 
 // ── Route ─────────────────────────────────────────────────────────────────
+// @ts-ignore
 export const Route = createFileRoute("/dashboard/training")({
     component: TrainingMonitor,
     head: () => ({
@@ -104,7 +105,7 @@ function TrainingMonitor() {
     }
 
     const progressPct = Math.min(100, Math.round(latestProgress))
-    const stepIdx = STEPS.indexOf(logs.at(-1)?.step ?? "")
+    const stepIdx = STEPS.indexOf(logs[logs.length - 1]?.step ?? "")
 
     return (
         <div className="flex flex-col gap-4 h-full">
@@ -164,8 +165,8 @@ function TrainingMonitor() {
                             <span
                                 key={s}
                                 className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${i < stepIdx ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                                        : i === stepIdx ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 animate-pulse"
-                                            : "bg-white/5 text-slate-500 border border-white/10"
+                                    : i === stepIdx ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 animate-pulse"
+                                        : "bg-white/5 text-slate-500 border border-white/10"
                                     }`}
                             >
                                 {s}
@@ -187,8 +188,8 @@ function TrainingMonitor() {
                         <button
                             onClick={() => setAutoScroll(p => !p)}
                             className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${autoScroll
-                                    ? "border-emerald-500/40 text-emerald-400"
-                                    : "border-white/10 text-slate-500"
+                                ? "border-emerald-500/40 text-emerald-400"
+                                : "border-white/10 text-slate-500"
                                 }`}
                         >
                             {autoScroll ? "auto-scroll ✓" : "auto-scroll"}
