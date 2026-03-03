@@ -24,6 +24,8 @@ dependencies = [
     "pandas>=2.0.0",
     "numpy>=1.26.0",
     "scikit-learn>=1.4.0",
+    "pyarrow>=23.0.1",
+    "psycopg2-binary>=2.9.11",
 ]
 
 [dependency-groups]
