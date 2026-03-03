@@ -44,6 +44,15 @@ def get_daily_prices(
     return list(session.execute(query, {"start": start, "end": end}).fetchall())
 
 
+def get_coverage(session: Session, symbol: str) -> dict[str, Any]:
+    """Return the earliest date, latest date, and row count for a symbol's table."""
+    from sqlalchemy import text
+    row = session.execute(
+        text(f'SELECT MIN(date)::date, MAX(date)::date, COUNT(*) FROM market."{symbol.upper()}"')
+    ).one()
+    return {"data_from": row[0], "data_to": row[1], "rows": row[2]}
+
+
 def get_ohlc(session: Session, symbol: str, days: int = 365) -> list[Any]:
     """
     Return recent OHLC data for a symbol.

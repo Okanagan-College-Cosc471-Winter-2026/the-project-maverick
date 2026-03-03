@@ -5,6 +5,8 @@ Response shapes are designed to be consumed directly by
 TradingView Lightweight Charts on the frontend.
 """
 
+from datetime import date
+
 from pydantic import BaseModel
 
 
@@ -16,6 +18,16 @@ class StockRead(BaseModel):
     sector: str | None = None
     industry: str | None = None
     exchange: str | None = None
+
+
+class CoverageRead(BaseModel):
+    """Data availability summary for a single stock."""
+
+    symbol: str
+    data_from: date
+    data_to: date
+    rows: int
+    gap_days: int
 
 
 class OHLCRead(BaseModel):
