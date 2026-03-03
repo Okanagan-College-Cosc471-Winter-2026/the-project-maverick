@@ -64,6 +64,8 @@ services:
     restart: always
     expose:
       - "8000"
+    volumes:
+      - ./datasets:/data/datasets
     depends_on:
       db:
         condition: service_healthy
@@ -154,6 +156,12 @@ services:
           --conn-login $${POSTGRES_USER:-postgres} \
           --conn-password $${POSTGRES_PASSWORD:-changethis} \
           --conn-port 5432
+
+        airflow connections delete backend_api 2>/dev/null || true
+        airflow connections add backend_api \
+          --conn-type http \
+          --conn-host http://backend:8000
+          
         echo "Airflow init complete."
     depends_on:
       db:
