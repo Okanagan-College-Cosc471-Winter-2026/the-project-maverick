@@ -32,8 +32,16 @@ def clean_and_import():
         conn.execute(text('DROP TABLE IF EXISTS market.stocks CASCADE;'))
         conn.commit()
     
-    # Re-create stocks registry
-    stocks_df = pd.DataFrame({'symbol': TICKERS, 'name': TICKERS})
+    # Re-create stocks registry with all columns the backend ORM expects
+    stocks_df = pd.DataFrame({
+        'symbol':    TICKERS,
+        'name':      TICKERS,
+        'sector':    None,
+        'industry':  None,
+        'currency':  'USD',
+        'exchange':  None,
+        'is_active': True,
+    })
     stocks_df.to_sql('stocks', engine, schema='market', if_exists='replace', index=False)
 
     print("\nStarting high-performance COPY ingestion...")
