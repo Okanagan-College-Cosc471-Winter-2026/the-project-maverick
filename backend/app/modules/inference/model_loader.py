@@ -37,8 +37,8 @@ class ModelManager:
     def __init__(self) -> None:
         """Initialize model paths."""
         if self._model is None:
-            # Path to model artifacts
-            base_path = Path(__file__).parent / "models" / "stock_prediction"
+            # Path to model artifacts at the backend/app/models level
+            base_path = Path(__file__).parent.parent.parent / "models"
             self._model_path = base_path
 
     def load_model(self) -> None:
@@ -46,34 +46,32 @@ class ModelManager:
         if self._model is not None:
             return  # Already loaded
 
-        model_file = self._model_path / "model.json"
-        feature_file = self._model_path / "feature_names.json"
-        metadata_file = self._model_path / "metadata.json"
-        encoder_file = self._model_path / "ticker_encoder.joblib"
+        model_file = self._model_path / "xgb_global.pkl"
+        metadata_file = self._model_path / "meta.json"
+        encoder_file = self._model_path / "encoder.pkl"
 
         # Check if files exist
         if not model_file.exists():
             raise FileNotFoundError(f"Model file not found: {model_file}")
 
-        # Load model
-        self._model = XGBRegressor()
-        self._model.load_model(str(model_file))
-
-        # Load feature names
-        with open(feature_file) as f:
-            self._feature_names = json.load(f)
-
         # Load metadata
         with open(metadata_file) as f:
             self._metadata = json.load(f)
+            
+        # Load feature names from metadata
+        self._feature_names = self._metadata.get("feature_cols", [])
+
+        # Load model using joblib (since it was saved with joblib to preserve sklearn wrapper)
+        logger.info(f"Loading model from {model_file}...")
+        self._model = joblib.load(model_file)
 
         # Load ticker encoder
         if encoder_file.exists():
             self._ticker_encoder = joblib.load(encoder_file)
 
         logger.info(f"Model loaded from {self._model_path}")
-        logger.info(f"  - Version: {self._metadata.get('version')}")
-        logger.info(f"  - Training date: {self._metadata.get('training_date')}")
+        logger.info(f"  - Horizon: {self._metadata.get('horizon')} mins")
+        logger.info(f"  - Split date: {self._metadata.get('split_date')}")
         if self._ticker_encoder is not None:
             logger.info(
                 f"  - Ticker encoder loaded with {len(self._ticker_encoder.classes_)} symbols"

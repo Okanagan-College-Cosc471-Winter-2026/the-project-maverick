@@ -1,3 +1,43 @@
+# Data
 ml/data/
+datasets/
 model_artifacts_classifier/
+
+# Secrets
 .env
+*.env.*
+
+# Airflow logs / runtime
+airflow/logs/
+airflow/plugins/__pycache__/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# ML artifacts
+ml/notebooks/model/
+ml/notebooks/stock_data/
+ml/notebooks/snapshots/
+*.pkl
+*.joblib
+*.parquet
+*.csv
+!backend/**/*.csv
+
+# Node
+node_modules/
+frontend/dist/
+
+# Misc
+.DS_Store
+*.log
