@@ -1,4 +1,4 @@
-import { Home, LineChart, Settings, Users } from "lucide-react"
+import { Activity, Home, LineChart, Settings, Users } from "lucide-react"
 
 import { SidebarAppearance } from "@/components/Common/Appearance"
 import { Logo } from "@/components/Common/Logo"
@@ -15,6 +15,7 @@ import { User } from "./User"
 const baseItems: Item[] = [
   { icon: Home, title: "Dashboard", path: "/dashboard" },
   { icon: LineChart, title: "Stocks", path: "/dashboard/stocks" },
+  { icon: Activity, title: "Training Monitor", path: "/dashboard/training" },
   { icon: Settings, title: "Settings", path: "/dashboard/settings" },
 ]
 

@@ -79,7 +79,7 @@ export const StockChart = (props: {
       candlestickSeries.setData(data as any)
 
       // Add prediction line if provided
-      if (predictionPrice && predictionDate) {
+      if (predictionPrice && predictionDate && data.length > 0) {
         const lastDataPoint = data[data.length - 1]
         // Convert ISO date to Unix timestamp (OHLC data uses timestamps)
         const predictionTimestamp = Math.floor(
@@ -114,7 +114,7 @@ export const StockChart = (props: {
       lineSeries.setData(lineData)
 
       // Add prediction line if provided
-      if (predictionPrice && predictionDate) {
+      if (predictionPrice && predictionDate && data.length > 0) {
         const lastDataPoint = data[data.length - 1]
         // Convert ISO date to Unix timestamp (OHLC data uses timestamps)
         const predictionTimestamp = Math.floor(

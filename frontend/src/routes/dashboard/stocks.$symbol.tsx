@@ -107,7 +107,9 @@ function ChartTab({ symbol }: { symbol: string }) {
       setLoadingPrediction(true)
       try {
         const result = await InferenceService.predictStock(symbol)
-        setTimeRange("1W")
+        const oneWeekAgo = Date.now() / 1000 - 7 * 24 * 60 * 60
+        const hasRecentData = ohlc.some((item) => item.time >= oneWeekAgo)
+        if (hasRecentData) setTimeRange("1W")
         setPrediction(result)
       } catch (error) {
         console.error("Failed to load prediction:", error)

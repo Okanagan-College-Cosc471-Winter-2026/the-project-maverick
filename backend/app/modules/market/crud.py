@@ -3,6 +3,7 @@ Market module database queries.
 """
 
 from datetime import date
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -26,19 +27,33 @@ def get_daily_prices(
     symbol: str,
     start: date,
     end: date,
-) -> list[DailyPrice]:
+) -> list[Any]:
     """Return daily OHLC rows for a symbol within a date range."""
-    stmt = (
-        select(DailyPrice)
-        .where(DailyPrice.symbol == symbol.upper())
-        .where(DailyPrice.date >= start)
-        .where(DailyPrice.date <= end)
-        .order_by(DailyPrice.date)
-    )
-    return list(session.scalars(stmt).all())
+    from sqlalchemy import text
+    query = text(f"""
+        SELECT date::timestamp as date,
+               open::numeric as open,
+               high::numeric as high,
+               low::numeric as low,
+               close::numeric as close,
+               volume::numeric as volume
+        FROM market."{symbol.upper()}"
+        WHERE date::timestamp >= :start AND date::timestamp <= :end
+        ORDER BY date ASC
+    """)
+    return list(session.execute(query, {"start": start, "end": end}).fetchall())
 
 
-def get_ohlc(session: Session, symbol: str, days: int = 365) -> list[DailyPrice]:
+def get_coverage(session: Session, symbol: str) -> dict[str, Any]:
+    """Return the earliest date, latest date, and row count for a symbol's table."""
+    from sqlalchemy import text
+    row = session.execute(
+        text(f'SELECT MIN(date)::date, MAX(date)::date, COUNT(*) FROM market."{symbol.upper()}"')
+    ).one()
+    return {"data_from": row[0], "data_to": row[1], "rows": row[2]}
+
+
+def get_ohlc(session: Session, symbol: str, days: int = 365) -> list[Any]:
     """
     Return recent OHLC data for a symbol.
 
@@ -48,14 +63,20 @@ def get_ohlc(session: Session, symbol: str, days: int = 365) -> list[DailyPrice]
         days: Number of days of history to retrieve (default 365)
 
     Returns:
-        List of DailyPrice records, ordered by date ascending
+        List of DailyPrice-like records, ordered by date ascending
     """
-    stmt = (
-        select(DailyPrice)
-        .where(DailyPrice.symbol == symbol.upper())
-        .order_by(DailyPrice.date.desc())
-        .limit(days * 30)  # Approximate: 30 bars per day for 15-min data
-    )
+    from sqlalchemy import text
+    query = text(f"""
+        SELECT date::timestamp as date,
+               open::numeric as open,
+               high::numeric as high,
+               low::numeric as low,
+               close::numeric as close,
+               volume::numeric as volume
+        FROM market."{symbol.upper()}"
+        ORDER BY date DESC
+        LIMIT :limit
+    """)
     # Get results and reverse to have oldest first
-    results = list(session.scalars(stmt).all())
+    results = session.execute(query, {"limit": days * 30}).fetchall()
     return list(reversed(results))

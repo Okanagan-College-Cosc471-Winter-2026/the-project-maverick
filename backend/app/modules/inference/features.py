@@ -1,137 +1,120 @@
 """
 Feature engineering for stock prediction inference.
 
-Ports the technical indicators from ml/features/technical_indicators.py
-to work with pandas DataFrames in the backend.
+Calculates the exact 53 features used by the XGBoost global model.
 """
 
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 
-def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
+def calculate_technical_indicators(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
     """
     Calculate all technical indicators needed for model inference.
+    Matches the `create_features` function from the training notebook exactly.
 
     Args:
         df: DataFrame with columns: date, open, high, low, close, volume
+        symbol: The ticker symbol
 
     Returns:
-        DataFrame with all 17 features required by the model
+        DataFrame containing exactly the features expected by the model.
     """
-    result = df.copy()
+    df = df.copy()
+    df['ticker'] = symbol
+    
+    # Needs to be sorted natively
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values(['ticker', 'date']).reset_index(drop=True)
+    
+    # Cast base cols to float
+    for c in ['open', 'high', 'low', 'close', 'volume']:
+        df[c] = df[c].astype(float)
+        
+    g = df.groupby('ticker', group_keys=False)
 
-    # Ensure date is datetime and sorted
-    result["date"] = pd.to_datetime(result["date"])
-    result = result.sort_values("date").reset_index(drop=True)
+    df['ret_1']     = g['close'].pct_change(1)
+    df['ret_5']     = g['close'].pct_change(5)
+    df['ret_10']    = g['close'].pct_change(10)
+    df['ret_20']    = g['close'].pct_change(20)
+    df['log_ret_1'] = np.log1p(df['ret_1'])
+    df['hl_spread'] = (df['high'] - df['low']) / df['close'].replace(0, np.nan)
+    df['oc_spread'] = (df['close'] - df['open']) / df['open'].replace(0, np.nan)
 
-    # 1. Simple Moving Averages
-    for window in [10, 20, 50]:
-        sma_col = f"sma_{window}"
-        dist_col = f"dist_sma_{window}"
-        result[sma_col] = result["close"].rolling(window=window).mean()
-        result[dist_col] = (result["close"] / result[sma_col]) - 1
+    for w in [10, 20, 50, 100]:
+        df[f'sma_{w}']      = g['close'].transform(lambda s: s.rolling(w).mean())
+        df[f'ema_{w}']      = g['close'].transform(lambda s: s.ewm(span=w, adjust=False).mean())
+        df[f'dist_sma_{w}'] = df['close'] / df[f'sma_{w}'] - 1.0
+        df[f'dist_ema_{w}'] = df['close'] / df[f'ema_{w}'] - 1.0
 
-    # 2. RSI (Relative Strength Index)
-    delta = result["close"].diff()
-    gain = delta.where(delta > 0, 0).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / (loss + 1e-8)
-    result["rsi"] = 100 - (100 / (1 + rs))
+    df['ema_12']      = g['close'].transform(lambda s: s.ewm(span=12, adjust=False).mean())
+    df['ema_26']      = g['close'].transform(lambda s: s.ewm(span=26, adjust=False).mean())
+    df['macd']        = df['ema_12'] - df['ema_26']
+    df['macd_signal'] = g['macd'].transform(lambda s: s.ewm(span=9, adjust=False).mean())
+    df['macd_hist']   = df['macd'] - df['macd_signal']
 
-    # 3. MACD
-    ema_fast = result["close"].ewm(span=12, adjust=False).mean()
-    ema_slow = result["close"].ewm(span=26, adjust=False).mean()
-    result["macd"] = ema_fast - ema_slow
-    result["macd_signal"] = result["macd"].ewm(span=9, adjust=False).mean()
-    result["macd_diff"] = result["macd"] - result["macd_signal"]
+    for w in [10, 20, 60]:
+        df[f'volatility_{w}'] = g['ret_1'].transform(lambda s: s.rolling(w).std())
+        roll_std  = g['close'].transform(lambda s: s.rolling(w).std())
+        roll_mean = g['close'].transform(lambda s: s.rolling(w).mean())
+        df[f'bb_{w}_width'] = (4.0 * roll_std) / roll_mean
 
-    # 4. Bollinger Bands
-    sma_20 = result["close"].rolling(window=20).mean()
-    std_20 = result["close"].rolling(window=20).std()
-    result["bb_upper"] = sma_20 + (std_20 * 2.0)
-    result["bb_lower"] = sma_20 - (std_20 * 2.0)
-    result["bb_width"] = (result["bb_upper"] - result["bb_lower"]) / sma_20
-    result["bb_position"] = (result["close"] - result["bb_lower"]) / (
-        result["bb_upper"] - result["bb_lower"] + 1e-8
-    )
+    delta    = g['close'].diff()
+    avg_gain = delta.clip(lower=0).groupby(df['ticker']).transform(lambda s: s.rolling(14).mean())
+    avg_loss = (-delta.clip(upper=0)).groupby(df['ticker']).transform(lambda s: s.rolling(14).mean())
+    df['rsi_14'] = 100 - (100 / (1 + avg_gain / avg_loss.replace(0, np.nan)))
 
-    # 5. Lagged Returns
-    for lag in [1, 5, 10, 20]:
-        result[f"ret_{lag}"] = result["close"].pct_change(lag)
+    df['vol_ma_20']    = g['volume'].transform(lambda s: s.rolling(20).mean())
+    df['vol_ratio_20'] = df['volume'] / df['vol_ma_20']
+    
+    for w in [5, 20, 60]:
+        df[f'vol_change_{w}'] = g['volume'].pct_change(w)
 
-    # 6. Volatility
-    returns = result["close"].pct_change()
-    result["volatility_20"] = returns.rolling(window=20).std()
+    df['rolling_max_10']   = g['high'].transform(lambda s: s.rolling(10).max())
+    df['rolling_min_10']   = g['low'].transform(lambda s: s.rolling(10).min())
+    df['dist_roll_max_10'] = df['close'] / df['rolling_max_10'] - 1.0
+    df['dist_roll_min_10'] = df['close'] / df['rolling_min_10'] - 1.0
 
-    # 7. Volume Features
-    result["vol_ma_20"] = result["volume"].rolling(window=20).mean()
-    result["vol_ratio"] = result["volume"] / (result["vol_ma_20"] + 1)
+    # Add hl_pct which might have been directly in notebook before feature func
+    df['hl_pct'] = (df['high'] - df['low']) / df['close'] * 100
 
-    # 8. Time Features
-    result["dayofweek"] = result["date"].dt.dayofweek
-    result["month"] = result["date"].dt.month
-
-    return result
-
-
-def get_feature_columns() -> list[str]:
-    """
-    Get the exact list of feature columns used by the global model.
-    Must match the training feature order exactly.
-
-    Returns:
-        List of 10 feature column names (ticker_id and hour are added separately)
-    """
-    return [
-        "ret_1",
-        "ret_5",
-        "ret_10",
-        "ret_20",
-        "dist_sma_10",
-        "dist_sma_50",
-        "volatility_20",
-        "rsi",
-        "vol_ratio",
-        "dayofweek",
-    ]
+    return df
 
 
 def prepare_features_for_prediction(
-    df: pd.DataFrame, symbol: str, ticker_encoder: Any
+    df: pd.DataFrame, symbol: str, ticker_encoder: Any, feature_cols_order: list[str]
 ) -> pd.DataFrame:
     """
-    Prepare features for a single prediction.
+    Prepare features for a single prediction based on the trained model.
 
     Args:
-        df: DataFrame with recent OHLCV data (at least 60 rows for indicators)
+        df: DataFrame with recent OHLCV data (need at least 150 rows for rolling 100s)
         symbol: Stock symbol (e.g., 'AAPL')
         ticker_encoder: LabelEncoder for converting symbols to IDs
+        feature_cols_order: The exact list of columns expected by the XGBoost model
 
     Returns:
-        DataFrame with features for the most recent data point (12 features total)
+        DataFrame with features for the most recent data point
     """
     # Calculate all indicators
-    df_with_features = calculate_technical_indicators(df)
+    df_with_features = calculate_technical_indicators(df, symbol)
 
-    # Drop rows with NaN (from rolling windows)
-    df_with_features = df_with_features.dropna()
-
-    if len(df_with_features) == 0:
-        raise ValueError("Insufficient data to calculate features")
-
-    # Get only the feature columns in the correct order
-    feature_cols = get_feature_columns()
+    # Encode ticker ID
+    try:
+        ticker_id = ticker_encoder.transform([symbol])[0]
+    except ValueError:
+        # If symbol is entirely unknown to encoder, default to the first class or a generic encoding
+        ticker_id = 0
+        
+    df_with_features['ticker_id'] = ticker_id
 
     # Get the most recent row with features
-    latest_features = df_with_features[feature_cols].iloc[[-1]].copy()
+    latest_features = df_with_features.iloc[[-1]].copy()
 
-    # Add ticker_id (encoded symbol) as first column
-    ticker_id = ticker_encoder.transform([symbol])[0]
-    latest_features.insert(0, "ticker_id", ticker_id)
+    # Fill any potential NaNs in the final row just in case
+    latest_features = latest_features.fillna(0)
 
-    # Add hour feature (0 for daily data, since we don't have intraday timestamps)
-    latest_features.insert(1, "hour", 0)
-
-    return latest_features
+    # Return exactly the required columns in the exact trained order
+    return latest_features[feature_cols_order].astype('float32')

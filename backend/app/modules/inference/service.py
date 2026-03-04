@@ -36,14 +36,13 @@ class InferenceService:
         if stock is None:
             raise ValueError(f"Stock not found: {symbol}")
 
-        # 2. Get recent OHLC data (need at least 60 bars for indicators)
-        # For 15-minute data, 60 bars = ~1.5 days
-        # Get last 100 bars to be safe
-        ohlc_data = crud.get_ohlc(session, symbol, days=10)  # Get 10 days worth
+        # 2. Get recent OHLC data (need at least 150 bars for 100-bar SMA/EMA)
+        # For 5-minute data, 1 day = 78 bars. Get 10 days worth.
+        ohlc_data = crud.get_ohlc(session, symbol, days=10)
 
-        if len(ohlc_data) < 60:
+        if len(ohlc_data) < 150:
             raise ValueError(
-                f"Insufficient data for {symbol}. Need at least 60 bars, got {len(ohlc_data)}"
+                f"Insufficient data for {symbol}. Need at least 150 bars, got {len(ohlc_data)}"
             )
 
         # 3. Convert to DataFrame
@@ -66,7 +65,9 @@ class InferenceService:
             ticker_encoder = model_manager.ticker_encoder
             if ticker_encoder is None:
                 raise ValueError("Ticker encoder not loaded")
-            features = prepare_features_for_prediction(df, symbol, ticker_encoder)
+            features = prepare_features_for_prediction(
+                df, symbol, ticker_encoder, model_manager.feature_names
+            )
         except Exception as e:
             raise ValueError(f"Error calculating features: {str(e)}")
 
@@ -78,16 +79,17 @@ class InferenceService:
         current_price = float(df["close"].iloc[-1])
         predicted_price = current_price * (1 + predicted_return)
 
-        # 7. Get prediction date (1 day ahead)
+        # 7. Get prediction date
         last_date = df["date"].iloc[-1]
         if isinstance(last_date, str):
             last_date = pd.to_datetime(last_date)
-        prediction_date = last_date + timedelta(days=1)
+        metadata = model_manager.metadata
+        horizon = metadata.get("horizon", 78)  # default to 78 bars (1 day)
+        prediction_date = last_date + timedelta(minutes=5 * horizon)
 
         # 8. Get model version from metadata
-        metadata = model_manager.metadata
-        training_date = metadata.get("training_date", "unknown")
-        model_version = f"xgboost-v1-{training_date[:10]}"
+        split_date = metadata.get("split_date", "unknown")
+        model_version = f"xgboost-v1-{split_date}"
 
         return PredictionResponse(
             symbol=symbol,

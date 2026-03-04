@@ -22,6 +22,7 @@ from sqlalchemy import create_engine, text
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from xgboost import XGBRegressor
 import joblib
+from dotenv import load_dotenv
 
 # Add parent directory to path to import features module
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -29,15 +30,18 @@ from features.technical_indicators import create_all_features, get_feature_colum
 
 warnings.filterwarnings('ignore')
 
+# Load environment variables
+load_dotenv()
+
 # ===== CONFIGURATION =====
 
 # Database configuration
 DB_CONFIG = {
     'host': os.getenv('POSTGRES_SERVER', 'localhost'),
     'port': int(os.getenv('POSTGRES_PORT', 5432)),
-    'database': os.getenv('POSTGRES_DB', 'app'),
-    'user': os.getenv('POSTGRES_USER', 'postgres'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'changethis')
+    'database': os.getenv('POSTGRES_DB', 'market_data'),
+    'user': os.getenv('POSTGRES_USER', 'mluser'),
+    'password': os.getenv('POSTGRES_PASSWORD', 'mlpassword')
 }
 
 # Model configuration
@@ -49,15 +53,16 @@ MODEL_CONFIG = {
 
 # XGBoost hyperparameters
 XGBOOST_PARAMS = {
-    'n_estimators': 500,
-    'max_depth': 6,
-    'learning_rate': 0.05,
+    'n_estimators': 3000,
+    'max_depth': 9,
+    'learning_rate': 0.01,
     'subsample': 0.8,
     'colsample_bytree': 0.8,
     'objective': 'reg:squarederror',
     'random_state': MODEL_CONFIG['random_state'],
     'n_jobs': -1,  # Use all available cores
-    'tree_method': 'hist'  # Faster training
+    'tree_method': 'hist',  # Faster training
+    'device': 'cuda'
 }
 
 # Output directory
@@ -87,16 +92,14 @@ def load_stock_data(engine) -> pd.DataFrame:
     query = """
     SELECT 
         dp.symbol,
-        dp.date,
+        dp.ts as date,
         dp.open,
         dp.high,
         dp.low,
         dp.close,
         dp.volume
-    FROM market.daily_prices dp
-    JOIN market.stocks s ON dp.symbol = s.symbol
-    WHERE s.is_active = true
-    ORDER BY dp.symbol, dp.date
+    FROM stg_transform.market_data dp
+    ORDER BY dp.symbol, dp.ts
     """
     
     with engine.connect() as conn:

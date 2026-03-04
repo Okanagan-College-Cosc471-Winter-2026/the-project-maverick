@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.api.deps import SessionDep
 from app.modules.market import crud
-from app.modules.market.schemas import OHLCRead, StockRead
+from app.modules.market.schemas import CoverageRead, OHLCRead, StockRead
 from app.modules.market.service import MarketService
 
 router = APIRouter(prefix="/market", tags=["market"])
@@ -40,6 +40,31 @@ def get_stock(symbol: str, session: SessionDep) -> StockRead:
         industry=stock.industry,
         exchange=stock.exchange,
     )
+
+
+@router.get("/coverage", response_model=list[CoverageRead])
+def get_coverage(session: SessionDep) -> list[CoverageRead]:
+    """
+    Return data availability (first date, last date, row count, gap to today)
+    for every active stock.
+    """
+    from datetime import date as today_date
+
+    stocks = crud.get_active_stocks(session)
+    today = today_date.today()
+    result = []
+    for stock in stocks:
+        cov = crud.get_coverage(session, stock.symbol)
+        result.append(
+            CoverageRead(
+                symbol=stock.symbol,
+                data_from=cov["data_from"],
+                data_to=cov["data_to"],
+                rows=cov["rows"],
+                gap_days=(today - cov["data_to"]).days if cov["data_to"] else 0,
+            )
+        )
+    return result
 
 
 @router.get("/stocks/{symbol}/ohlc", response_model=list[OHLCRead])

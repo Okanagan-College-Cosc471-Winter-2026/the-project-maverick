@@ -68,6 +68,68 @@ conda list
 pytest tests/ml/
 ```
 
+## Serving Data to DRAC
+
+The script `ml/scripts/serve_parquet.sh` exposes the processed CSV files over a public HTTPS URL so they can be downloaded from DRAC (or any remote machine).
+
+### How it works
+
+```
+[processed_csv/]  →  [python HTTP server :8000]  →  [Serveo SSH tunnel]  →  public HTTPS URL
+```
+
+1. **Python HTTP server** — serves `ml/data/processed_csv/` on `localhost:8000`. No auth, plain file listing.
+2. **Serveo tunnel** — opens an SSH reverse tunnel (`-R 80:localhost:8000 serveo.net`) that gives a public `https://*.serveousercontent.com` URL. No install required, uses system SSH.
+
+### Run it (on this machine)
+
+```bash
+bash ml/scripts/serve_parquet.sh
+```
+
+Output will print the public URL, e.g.:
+```
+Public URL: https://cd4b1e8ff5eaf0e6-184-67-221-54.serveousercontent.com
+```
+
+The URL changes every time the tunnel restarts. Copy it into your DRAC notebook.
+
+### Download on DRAC (notebook cell)
+
+```python
+import subprocess, pandas as pd, os
+
+BASE_URL = "https://<url-from-script>"  # update this each run
+TICKERS = ["AAPL","AMD","AMZN","BABA","BAC","BA","C","CSCO","CVX","DIS",
+           "F","GE","GOOGL","IBM","INTC","JNJ","JPM","KO","MCD","META",
+           "MSFT","NFLX","NVDA","PFE","T","TSLA","VZ","WMT","XOM"]
+
+os.makedirs("parquet_data", exist_ok=True)
+data = {}
+for ticker in TICKERS:
+    path = f"parquet_data/{ticker}.csv"
+    subprocess.run(["wget", "-q", "-c", "--tries=5", "--timeout=60",
+                    "-O", path, f"{BASE_URL}/{ticker}.csv"], check=True)
+    data[ticker] = pd.read_csv(path, parse_dates=["date"])
+    print(f"{ticker}: {len(data[ticker])} rows")
+```
+
+Uses `wget -c` (resume on failure) to handle large files and unstable SSL connections.
+
+### Stop the server
+
+```bash
+kill <HTTP_PID> <TUNNEL_PID>   # PIDs printed by the script
+```
+
+### Available tickers (29)
+
+`AAPL AMD AMZN BABA BAC BA C CSCO CVX DIS F GE GOOGL IBM INTC JNJ JPM KO MCD META MSFT NFLX NVDA PFE T TSLA VZ WMT XOM`
+
+Data spans **2020–2025** (5-min bars), merged from FMP (2020–2023) and Google Drive (2023–2025).
+
+---
+
 ## Workflow
 
 1. **Explore data** → `notebooks/01_eda.ipynb`
