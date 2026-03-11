@@ -127,13 +127,16 @@ def format_snapshot_table(df: pd.DataFrame) -> None:
 
 def prediction_metrics(payload: dict) -> None:
     cols = st.columns(5)
-    cols[0].metric("Current Price", f"${payload['current_price']:.2f}")
-    cols[1].metric("Predicted Price", f"${payload['predicted_price']:.2f}")
+    cols[0].metric("Latest Price", f"${payload['current_price']:.2f}")
+    cols[1].metric("Forecast Price", f"${payload['predicted_price']:.2f}")
     cols[2].metric("Predicted Return", f"{payload['predicted_return']:.2f}%")
     confidence = payload.get("confidence")
     cols[3].metric("Confidence", "N/A" if confidence is None else f"{confidence:.2f}")
     cols[4].metric("Model Version", payload["model_version"])
-    st.caption(f"Prediction date: {payload['prediction_date']}")
+    st.caption(
+        f"Forecast is anchored to the latest available bar in the dataset. "
+        f"Model horizon reference: {payload['prediction_date']}"
+    )
 
 
 def build_price_chart(df: pd.DataFrame, title: str, prediction: dict | None = None) -> go.Figure:
@@ -163,16 +166,26 @@ def build_price_chart(df: pd.DataFrame, title: str, prediction: dict | None = No
         )
     )
     if prediction:
-        prediction_date = pd.to_datetime(prediction["prediction_date"], utc=True)
         fig.add_trace(
             go.Scatter(
-                x=[df["date"].iloc[-1], prediction_date],
-                y=[df["close"].iloc[-1], prediction["predicted_price"]],
-                mode="lines+markers",
+                x=[df["date"].iloc[-1]],
+                y=[prediction["predicted_price"]],
+                mode="markers",
                 name="Prediction",
-                line={"color": "#f59e0b", "dash": "dash", "width": 3},
-                marker={"size": 8, "color": "#f59e0b"},
+                marker={"size": 10, "color": "#f59e0b", "symbol": "diamond"},
             )
+        )
+        fig.add_annotation(
+            x=df["date"].iloc[-1],
+            y=prediction["predicted_price"],
+            text=f"Pred ${prediction['predicted_price']:.2f}",
+            showarrow=True,
+            arrowhead=2,
+            ax=32,
+            ay=-40,
+            bgcolor="rgba(245,158,11,0.12)",
+            bordercolor="#f59e0b",
+            font={"size": 11, "color": "#92400e"},
         )
 
     latest_close = float(df["close"].iloc[-1])
@@ -188,8 +201,16 @@ def build_price_chart(df: pd.DataFrame, title: str, prediction: dict | None = No
         margin={"l": 20, "r": 20, "t": 50, "b": 20},
         height=560,
         hovermode="x unified",
+        dragmode="pan",
     )
-    fig.update_xaxes(showgrid=False, rangeslider_visible=False)
+    fig.update_xaxes(
+        showgrid=False,
+        rangeslider_visible=False,
+        rangebreaks=[
+            dict(bounds=["sat", "mon"]),
+            dict(bounds=[16, 9.5], pattern="hour"),
+        ],
+    )
     fig.update_yaxes(showgrid=True, gridcolor="rgba(148, 163, 184, 0.15)")
     fig.add_hline(y=latest_close, line_width=1, line_dash="dot", line_color="#94a3b8")
     return fig
@@ -234,11 +255,11 @@ def render_stocks(stocks: list[dict]) -> None:
         st.info("No stocks are available.")
         return
 
-    controls_left, controls_mid, controls_right = st.columns([1.4, 1, 1])
+    controls_left, controls_mid, controls_right = st.columns([1.7, 1, 1.1])
     search = controls_left.text_input("Search by symbol or company name")
     sectors = ["All"] + sorted([sector for sector in df["sector"].unique() if sector != "N/A"])
     sector_filter = controls_mid.selectbox("Sector", sectors)
-    max_rows = controls_right.selectbox("Rows", [10, 15, 25, 50], index=1)
+    days = controls_right.select_slider("History window", options=[7, 30, 90, 180, 365, 730], value=7)
 
     filtered = df.copy()
     if search:
@@ -254,92 +275,81 @@ def render_stocks(stocks: list[dict]) -> None:
         st.warning("No stocks match the current filters.")
         return
 
-    table_col, detail_col = st.columns([1.05, 1.45], gap="large")
     options = filtered["symbol"].tolist()
     default_symbol = st.session_state.get("selected_symbol", options[0])
     if default_symbol not in options:
         default_symbol = options[0]
 
-    with table_col:
-        st.markdown("#### Stock List")
-        format_stock_table(
-            filtered[["symbol", "name", "sector", "exchange"]].head(max_rows),
-            height=540,
-        )
-
-    with detail_col:
+    select_col, status_col = st.columns([1.2, 2.8], gap="large")
+    with select_col:
         symbol = st.selectbox("Stock detail", options, index=options.index(default_symbol))
     st.session_state["selected_symbol"] = symbol
     detail = next(stock for stock in stocks if stock["symbol"] == symbol)
 
-    with detail_col:
-        headline_left, headline_right = st.columns([1.3, 1])
-        with headline_left:
-            st.markdown(f"### {detail['name']}")
-            st.caption(f"{symbol}  |  {detail.get('sector') or 'N/A'}  |  {detail.get('exchange') or 'N/A'}")
-        with headline_right:
-            days = st.select_slider("History window", options=[30, 90, 180, 365, 730], value=365)
+    with status_col:
+        st.markdown(f"### {detail['name']}")
+        st.caption(f"{symbol}  |  {detail.get('sector') or 'N/A'}  |  {detail.get('exchange') or 'N/A'}")
 
-        with st.spinner("Loading OHLC data..."):
-            chart_df = ohlc_dataframe(symbol, days)
-        if chart_df.empty:
-            st.warning("No OHLC data is available for this symbol.")
-            return
+    with st.spinner("Loading OHLC data..."):
+        chart_df = ohlc_dataframe(symbol, days)
+    if chart_df.empty:
+        st.warning("No OHLC data is available for this symbol.")
+        return
 
-        latest_close = float(chart_df["close"].iloc[-1])
-        first_close = float(chart_df["close"].iloc[0])
-        period_return = ((latest_close / first_close) - 1) * 100 if first_close else 0.0
-        avg_volume = float(chart_df["volume"].tail(min(len(chart_df), 20)).mean())
+    latest_close = float(chart_df["close"].iloc[-1])
+    first_close = float(chart_df["close"].iloc[0])
+    period_return = ((latest_close / first_close) - 1) * 100 if first_close else 0.0
+    avg_volume = float(chart_df["volume"].tail(min(len(chart_df), 20)).mean())
 
-        meta_cols = st.columns(4)
-        meta_cols[0].metric("Latest Close", f"${latest_close:.2f}")
-        meta_cols[1].metric("Period Return", f"{period_return:.2f}%")
-        meta_cols[2].metric("Avg Volume (20)", f"{int(avg_volume):,}")
-        meta_cols[3].metric("Bars Loaded", f"{len(chart_df):,}")
+    meta_cols = st.columns(4)
+    meta_cols[0].metric("Latest Close", f"${latest_close:.2f}")
+    meta_cols[1].metric("Period Return", f"{period_return:.2f}%")
+    meta_cols[2].metric("Avg Volume (20)", f"{int(avg_volume):,}")
+    meta_cols[3].metric("Bars Loaded", f"{len(chart_df):,}")
 
-        show_prediction = st.toggle("Overlay model prediction", value=False)
-        prediction = None
-        if show_prediction:
-            try:
-                prediction = predict(symbol)
-                prediction_metrics(prediction)
-            except ApiError as exc:
-                st.error(str(exc))
+    show_prediction = st.toggle("Overlay model prediction", value=False)
+    prediction = None
+    if show_prediction:
+        try:
+            prediction = predict(symbol)
+            prediction_metrics(prediction)
+        except ApiError as exc:
+            st.error(str(exc))
 
-        st.plotly_chart(
-            build_price_chart(chart_df, f"{detail['name']} ({symbol})", prediction),
+    st.plotly_chart(
+        build_price_chart(chart_df, f"{detail['name']} ({symbol})", prediction),
+        use_container_width=True,
+    )
+
+    info_tab, data_tab = st.tabs(["Summary", "Raw Data"])
+    with info_tab:
+        info_left, info_right = st.columns([1, 1])
+        with info_left:
+            st.markdown("#### Company Context")
+            st.write(f"Sector: `{detail.get('sector') or 'N/A'}`")
+            st.write(f"Industry: `{detail.get('industry') or 'N/A'}`")
+            st.write(f"Exchange: `{detail.get('exchange') or 'N/A'}`")
+        with info_right:
+            st.markdown("#### Recent Range")
+            st.write(f"High: `${float(chart_df['high'].max()):.2f}`")
+            st.write(f"Low: `${float(chart_df['low'].min()):.2f}`")
+            st.write(f"Latest Volume: `{int(chart_df['volume'].iloc[-1]):,}`")
+    with data_tab:
+        raw_view = chart_df[["date", "open", "high", "low", "close", "volume"]].copy()
+        st.dataframe(
+            raw_view.tail(200).sort_values("date", ascending=False),
             use_container_width=True,
+            hide_index=True,
+            height=420,
+            column_config={
+                "date": st.column_config.DatetimeColumn("Timestamp", format="YYYY-MM-DD HH:mm"),
+                "open": st.column_config.NumberColumn("Open", format="$%.2f"),
+                "high": st.column_config.NumberColumn("High", format="$%.2f"),
+                "low": st.column_config.NumberColumn("Low", format="$%.2f"),
+                "close": st.column_config.NumberColumn("Close", format="$%.2f"),
+                "volume": st.column_config.NumberColumn("Volume", format="%d"),
+            },
         )
-
-        info_tab, data_tab = st.tabs(["Summary", "Raw Data"])
-        with info_tab:
-            info_left, info_right = st.columns([1, 1])
-            with info_left:
-                st.markdown("#### Company Context")
-                st.write(f"Sector: `{detail.get('sector') or 'N/A'}`")
-                st.write(f"Industry: `{detail.get('industry') or 'N/A'}`")
-                st.write(f"Exchange: `{detail.get('exchange') or 'N/A'}`")
-            with info_right:
-                st.markdown("#### Recent Range")
-                st.write(f"High: `${float(chart_df['high'].max()):.2f}`")
-                st.write(f"Low: `${float(chart_df['low'].min()):.2f}`")
-                st.write(f"Latest Volume: `{int(chart_df['volume'].iloc[-1]):,}`")
-        with data_tab:
-            raw_view = chart_df[["date", "open", "high", "low", "close", "volume"]].copy()
-            st.dataframe(
-                raw_view.tail(200).sort_values("date", ascending=False),
-                use_container_width=True,
-                hide_index=True,
-                height=420,
-                column_config={
-                    "date": st.column_config.DatetimeColumn("Timestamp", format="YYYY-MM-DD HH:mm"),
-                    "open": st.column_config.NumberColumn("Open", format="$%.2f"),
-                    "high": st.column_config.NumberColumn("High", format="$%.2f"),
-                    "low": st.column_config.NumberColumn("Low", format="$%.2f"),
-                    "close": st.column_config.NumberColumn("Close", format="$%.2f"),
-                    "volume": st.column_config.NumberColumn("Volume", format="%d"),
-                },
-            )
 
 
 def render_predictions(stocks: list[dict]) -> None:
