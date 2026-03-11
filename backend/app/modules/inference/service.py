@@ -62,8 +62,11 @@ class InferenceService:
 
         # 4. Prepare features
         try:
+            ticker_encoder = model_manager.ticker_encoder
+            if ticker_encoder is None:
+                raise ValueError("Ticker encoder not loaded")
             features = prepare_features_for_prediction(
-                df, symbol, model_manager.ticker_mapping, model_manager.feature_names
+                df, symbol, ticker_encoder, model_manager.feature_names
             )
         except Exception as e:
             raise ValueError(f"Error calculating features: {str(e)}")
@@ -81,17 +84,12 @@ class InferenceService:
         if isinstance(last_date, str):
             last_date = pd.to_datetime(last_date)
         metadata = model_manager.metadata
-        horizon = int(metadata.get("prediction_horizon", 60))
-        horizon_unit = str(metadata.get("prediction_horizon_unit", "periods")).lower()
-        if horizon_unit == "days":
-            prediction_date = last_date + timedelta(days=horizon)
-        elif horizon_unit == "hours":
-            prediction_date = last_date + timedelta(hours=horizon)
-        else:
-            prediction_date = last_date + timedelta(minutes=5 * horizon)
+        horizon = metadata.get("horizon", 78)
+        prediction_date = last_date + timedelta(minutes=5 * horizon)
 
         # 8. Get model version from metadata
-        model_version = f"xgboost-v{metadata.get('model_version', '1.0')}"
+        split_date = metadata.get("split_date", "unknown")
+        model_version = f"xgboost-v1-{split_date}"
 
         return PredictionResponse(
             symbol=symbol,
