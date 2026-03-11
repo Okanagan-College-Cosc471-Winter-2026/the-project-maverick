@@ -10,6 +10,17 @@
 
 A production-ready system that leverages XGBoost machine learning to provide real-time stock price predictions with live dashboard visualization. The system continuously monitors market data, calculates technical indicators, and generates predictions with confidence scores.
 
+## Streamlit Frontend Migration
+
+An in-progress Streamlit replacement frontend now lives in `frontend_streamlit/`. It is designed to run directly from a local Python virtual environment instead of Docker:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r frontend_streamlit/requirements.txt
+API_BASE_URL=http://localhost:8000/api/v1 streamlit run frontend_streamlit/app.py
+```
+
 ## 🌟 Key Features
 - **Real-Time Predictions**: Automated polling (configurable interval) with sub-second inference.
 - **Advanced Machine Learning**: XGBoost model trained on historical data with technical indicators (RSI, MACD, Bollinger Bands).
