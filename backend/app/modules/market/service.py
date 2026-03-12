@@ -55,7 +55,7 @@ class MarketService:
                 high=r.high,
                 low=r.low,
                 close=r.close,
-                volume=r.volume,
+                volume=int(round(float(r.volume))),
             )
             for r in rows
         ]

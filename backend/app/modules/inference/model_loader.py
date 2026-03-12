@@ -37,8 +37,7 @@ class ModelManager:
     def __init__(self) -> None:
         """Initialize model paths."""
         if self._model is None:
-            # Path to model artifacts at the backend/app/models level
-            base_path = Path(__file__).parent.parent.parent / "models"
+            base_path = Path(__file__).resolve().parents[4] / "model_artifacts" / "stock_prediction_xgb_global"
             self._model_path = base_path
 
     def load_model(self) -> None:
@@ -54,27 +53,22 @@ class ModelManager:
         if not model_file.exists():
             raise FileNotFoundError(f"Model file not found: {model_file}")
 
-        # Load metadata
         with open(metadata_file) as f:
             self._metadata = json.load(f)
-            
-        # Load feature names from metadata
         self._feature_names = self._metadata.get("feature_cols", [])
 
-        # Load model using joblib (since it was saved with joblib to preserve sklearn wrapper)
         logger.info(f"Loading model from {model_file}...")
         self._model = joblib.load(model_file)
-
-        # Load ticker encoder
         if encoder_file.exists():
             self._ticker_encoder = joblib.load(encoder_file)
 
         logger.info(f"Model loaded from {self._model_path}")
-        logger.info(f"  - Horizon: {self._metadata.get('horizon')} mins")
-        logger.info(f"  - Split date: {self._metadata.get('split_date')}")
+        logger.info("  - Horizon: %s mins", self._metadata.get("horizon"))
+        logger.info("  - Split date: %s", self._metadata.get("split_date"))
         if self._ticker_encoder is not None:
             logger.info(
-                f"  - Ticker encoder loaded with {len(self._ticker_encoder.classes_)} symbols"
+                "  - Ticker encoder loaded with %s symbols",
+                len(self._ticker_encoder.classes_),
             )
 
     @property

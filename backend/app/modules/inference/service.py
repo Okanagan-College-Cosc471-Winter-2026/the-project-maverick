@@ -84,7 +84,7 @@ class InferenceService:
         if isinstance(last_date, str):
             last_date = pd.to_datetime(last_date)
         metadata = model_manager.metadata
-        horizon = metadata.get("horizon", 78)  # default to 78 bars (1 day)
+        horizon = metadata.get("horizon", 78)
         prediction_date = last_date + timedelta(minutes=5 * horizon)
 
         # 8. Get model version from metadata
