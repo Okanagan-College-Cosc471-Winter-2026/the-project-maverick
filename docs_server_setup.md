@@ -39,6 +39,47 @@ Main values to change:
 
 If the database is on another machine, put its hostname or IP in `POSTGRES_SERVER`.
 
+For your FIR/Nibi tunnel setup, use:
+
+```dotenv
+POSTGRES_SERVER=localhost
+POSTGRES_PORT=15432
+POSTGRES_DB=emilioig_db
+POSTGRES_USER=YOUR_DB_USER
+POSTGRES_PASSWORD=YOUR_DB_PASSWORD
+```
+
+## SSH tunnel
+
+Start the tunnel on the same machine where the backend will run:
+
+```bash
+ssh -N -L 15432:cedar-pgsql-vm:5432 YOUR_USER@fir.alliancecan.ca
+```
+
+If needed:
+
+```bash
+ssh -N -L 15432:cedar-pgsql-vm.int.cedar.computecanada.ca:5432 YOUR_USER@fir.alliancecan.ca
+```
+
+Quick connection check:
+
+```bash
+python - <<'PY'
+import psycopg
+conn = psycopg.connect(
+    host="localhost",
+    port=15432,
+    dbname="emilioig_db",
+    user="YOUR_DB_USER",
+    password="YOUR_DB_PASSWORD",
+)
+print("connected", conn.info.dbname, conn.info.user)
+conn.close()
+PY
+```
+
 ## 2. Create the Python environment
 
 ```bash
