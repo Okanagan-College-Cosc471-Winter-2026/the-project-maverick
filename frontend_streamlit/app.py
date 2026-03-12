@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -450,7 +450,7 @@ def main() -> None:
         "Navigation",
         ["Overview", "Stocks", "Predictions", "Snapshots"],
     )
-    st.sidebar.caption(f"Loaded at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    st.sidebar.caption(f"Loaded at {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC")
 
     if page == "Overview":
         render_overview(stocks)
