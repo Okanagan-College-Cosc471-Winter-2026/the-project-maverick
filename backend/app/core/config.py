@@ -45,7 +45,7 @@ class Settings(BaseSettings):
         ]
 
     PROJECT_NAME: str = "MarketSight"
-    ACTIVE_MODEL: str = "stock_prediction_xgb_global"
+    ACTIVE_MODEL: str = "nextday_15m_path_final"
     POSTGRES_SERVER: str
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str

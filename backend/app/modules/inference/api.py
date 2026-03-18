@@ -7,30 +7,19 @@ The response shape depends on ACTIVE_MODEL:
   - nextday_15m_path_final       → NextDayPredictionResponse
 """
 
-from typing import Union
-
 from fastapi import APIRouter, HTTPException
 
 from app.api.deps import SessionDep
-from app.modules.inference.schemas import NextDayPredictionResponse, PredictionResponse
+from app.modules.inference.schemas import NextDayPredictionResponse
 from app.modules.inference.service import InferenceService
 
 router = APIRouter(prefix="/inference", tags=["inference"])
 
 
-@router.get(
-    "/predict/{symbol}",
-    response_model=Union[PredictionResponse, NextDayPredictionResponse],
-)
-def predict_stock_price(
-    symbol: str, session: SessionDep
-) -> PredictionResponse | NextDayPredictionResponse:
+@router.get("/predict/{symbol}", response_model=NextDayPredictionResponse)
+def predict_stock_price(symbol: str, session: SessionDep) -> NextDayPredictionResponse:
     """
-    Get price prediction for a stock.
-
-    Response shape depends on the active model:
-    - **PredictionResponse** (legacy bundle): single end-of-horizon price.
-    - **NextDayPredictionResponse** (next-day path bundle): 26-bar 15-min path.
+    Get next-day 26-bar 15-min path prediction for a stock.
 
     Args:
         symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'MSFT')

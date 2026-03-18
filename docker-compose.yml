@@ -64,6 +64,7 @@ services:
       - "8000:8000"
     volumes:
       - ./datasets:/data/datasets
+      - ./model_artifacts:/model_artifacts:ro
     depends_on:
       db:
         condition: service_healthy
@@ -105,10 +106,12 @@ services:
     build:
       context: .
       dockerfile: docker/streamlit/Dockerfile
-    image: streamlit
+    image: maverick-streamlit
     restart: always
     ports:
       - "8501:8501"
+    environment:
+      - API_BASE_URL=http://backend:8000/api/v1
     depends_on:
       - backend
 
