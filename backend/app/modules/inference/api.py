@@ -2,42 +2,51 @@
 Inference API endpoints.
 
 Provides stock price prediction using trained XGBoost model.
+The response shape depends on ACTIVE_MODEL:
+  - stock_prediction_xgb_global  → PredictionResponse
+  - nextday_15m_path_final       → NextDayPredictionResponse
 """
+
+from typing import Union
 
 from fastapi import APIRouter, HTTPException
 
 from app.api.deps import SessionDep
-from app.modules.inference.schemas import PredictionResponse
+from app.modules.inference.schemas import NextDayPredictionResponse, PredictionResponse
 from app.modules.inference.service import InferenceService
 
 router = APIRouter(prefix="/inference", tags=["inference"])
 
 
-@router.get("/predict/{symbol}", response_model=PredictionResponse)
-def predict_stock_price(symbol: str, session: SessionDep) -> PredictionResponse:
+@router.get(
+    "/predict/{symbol}",
+    response_model=Union[PredictionResponse, NextDayPredictionResponse],
+)
+def predict_stock_price(
+    symbol: str, session: SessionDep
+) -> PredictionResponse | NextDayPredictionResponse:
     """
-    Get 1-day price prediction for a stock.
+    Get price prediction for a stock.
+
+    Response shape depends on the active model:
+    - **PredictionResponse** (legacy bundle): single end-of-horizon price.
+    - **NextDayPredictionResponse** (next-day path bundle): 26-bar 15-min path.
 
     Args:
         symbol: Stock symbol (e.g., 'AAPL', 'GOOGL', 'MSFT')
 
-    Returns:
-        Prediction with current price, predicted price, and expected return
-
     Raises:
         404: Stock not found
-        400: Insufficient data for prediction
+        400: Insufficient data or missing features
         500: Model error
     """
     try:
         return InferenceService.predict_stock_price(session, symbol.upper())
     except ValueError as e:
-        # Stock not found or insufficient data
         error_msg = str(e)
         if "not found" in error_msg.lower():
             raise HTTPException(status_code=404, detail=error_msg)
         else:
             raise HTTPException(status_code=400, detail=error_msg)
     except Exception as e:
-        # Model loading or prediction error
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")

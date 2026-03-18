@@ -1,109 +1,128 @@
 """
-Model loader for XGBoost stock prediction model.
+Model loader for XGBoost stock prediction models.
 
-Implements singleton pattern to load model once on startup.
+Supports two bundle types:
+  - LegacyXGBBundle (stock_prediction_xgb_global): single XGBRegressor → scalar return
+  - NextDayPathBundle (nextday_15m_path_final): 26 native boosters → list of log-returns
+
+Switch bundles by setting ACTIVE_MODEL in .env.
 """
 
 import json
 import logging
+from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 import joblib  # type: ignore[import-untyped]
-from xgboost import XGBRegressor
+import pandas as pd
+import xgboost
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
-class ModelManager:
-    """
-    Singleton class to manage the XGBoost model.
+class BaseModelBundle(ABC):
+    """Abstract base for all model bundles."""
 
-    Loads the model once on first access and caches it for subsequent requests.
-    """
+    model_type: str
+    feature_names: list[str]
+    metadata: dict[str, Any]
+    model_path: Path
 
-    _instance: ClassVar["ModelManager | None"] = None
-    _model: XGBRegressor | None = None
-    _feature_names: list[str] | None = None
-    _metadata: dict[str, Any] | None = None
-    _ticker_encoder: Any = None
-    _model_path: Path
+    @abstractmethod
+    def predict(self, feature_row: pd.DataFrame) -> Any:
+        """Run inference on a single prepared feature row."""
+        ...
 
-    def __new__(cls) -> "ModelManager":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
 
-    def __init__(self) -> None:
-        """Initialize model paths."""
-        if self._model is None:
-            base_path = Path(__file__).resolve().parents[4] / "model_artifacts" / settings.ACTIVE_MODEL
-            self._model_path = base_path
+class LegacyXGBBundle(BaseModelBundle):
+    """Bundle for stock_prediction_xgb_global (single XGBRegressor, scalar output)."""
 
-    def load_model(self) -> None:
-        """Load the XGBoost model and metadata from disk."""
-        if self._model is not None:
-            return  # Already loaded
+    model_type = "legacy_xgb"
 
-        model_file = self._model_path / "xgb_global.pkl"
-        metadata_file = self._model_path / "meta.json"
-        encoder_file = self._model_path / "encoder.pkl"
+    def __init__(self, path: Path) -> None:
+        self.model_path = path
 
-        # Check if files exist
-        if not model_file.exists():
-            raise FileNotFoundError(f"Model file not found: {model_file}")
-
+        metadata_file = path / "meta.json"
         with open(metadata_file) as f:
-            self._metadata = json.load(f)
-        self._feature_names = self._metadata.get("feature_cols", [])
+            self.metadata = json.load(f)
+        self.feature_names = self.metadata.get("feature_cols", [])
 
-        logger.info(f"Loading model from {model_file}...")
-        self._model = joblib.load(model_file)
-        if encoder_file.exists():
-            self._ticker_encoder = joblib.load(encoder_file)
+        model_file = path / "xgb_global.pkl"
+        logger.info("Loading legacy XGBRegressor from %s …", model_file)
+        self._model: xgboost.XGBRegressor = joblib.load(model_file)
 
-        logger.info(f"Model loaded from {self._model_path}")
-        logger.info("  - Horizon: %s mins", self._metadata.get("horizon"))
-        logger.info("  - Split date: %s", self._metadata.get("split_date"))
-        if self._ticker_encoder is not None:
-            logger.info(
-                "  - Ticker encoder loaded with %s symbols",
-                len(self._ticker_encoder.classes_),
-            )
+        encoder_file = path / "encoder.pkl"
+        self.ticker_encoder = joblib.load(encoder_file) if encoder_file.exists() else None
 
-    @property
-    def model(self) -> XGBRegressor:
-        """Get the loaded model."""
-        if self._model is None:
-            self.load_model()
-        assert self._model is not None
-        return self._model
+        logger.info(
+            "LegacyXGBBundle loaded | horizon=%s | split_date=%s | features=%d | tickers=%s",
+            self.metadata.get("horizon"),
+            self.metadata.get("split_date"),
+            len(self.feature_names),
+            len(self.ticker_encoder.classes_) if self.ticker_encoder is not None else "n/a",
+        )
 
-    @property
-    def feature_names(self) -> list[str]:
-        """Get the feature names."""
-        if self._feature_names is None:
-            self.load_model()
-        assert self._feature_names is not None
-        return self._feature_names
-
-    @property
-    def metadata(self) -> dict[str, Any]:
-        """Get the model metadata."""
-        if self._metadata is None:
-            self.load_model()
-        assert self._metadata is not None
-        return self._metadata
-
-    @property
-    def ticker_encoder(self) -> Any:
-        """Get the ticker encoder."""
-        if self._ticker_encoder is None:
-            self.load_model()
-        return self._ticker_encoder
+    def predict(self, feature_row: pd.DataFrame) -> float:
+        return float(self._model.predict(feature_row)[0])
 
 
-# Global instance
-model_manager = ModelManager()
+class NextDayPathBundle(BaseModelBundle):
+    """Bundle for nextday_15m_path_final (26 native boosters, list[float] output)."""
+
+    model_type = "next_day_path"
+
+    def __init__(self, path: Path) -> None:
+        self.model_path = path
+
+        feature_names_file = path / "feature_names.json"
+        with open(feature_names_file) as f:
+            self.feature_names = json.load(f)
+
+        metadata_file = path / "metadata.json"
+        with open(metadata_file) as f:
+            self.metadata = json.load(f)
+
+        manifest_file = path / "models" / "model_manifest.json"
+        with open(manifest_file) as f:
+            manifest = json.load(f)
+
+        # The manifest stores absolute training-environment paths; use local filenames only.
+        models_dir = path / "models"
+        ordered_keys = sorted(manifest["models"].keys())  # target_h00 … target_h25
+        self.boosters: list[xgboost.Booster] = []
+        for key in ordered_keys:
+            filename = Path(manifest["models"][key]).name  # e.g. "horizon_00.json"
+            booster = xgboost.Booster()
+            booster.load_model(str(models_dir / filename))
+            self.boosters.append(booster)
+
+        logger.info(
+            "NextDayPathBundle loaded | horizons=%d | features=%d | path=%s",
+            len(self.boosters),
+            len(self.feature_names),
+            path,
+        )
+
+    def predict(self, feature_row: pd.DataFrame) -> list[float]:
+        """Return 26 log-return predictions, one per 15-min bar."""
+        dmatrix = xgboost.DMatrix(feature_row)
+        return [float(booster.predict(dmatrix)[0]) for booster in self.boosters]
+
+
+def create_model_bundle(path: Path) -> BaseModelBundle:
+    """Auto-detect and instantiate the correct bundle type."""
+    if (path / "models" / "model_manifest.json").exists():
+        return NextDayPathBundle(path)
+    elif (path / "xgb_global.pkl").exists():
+        return LegacyXGBBundle(path)
+    else:
+        raise ValueError(f"Unknown model bundle structure at {path}")
+
+
+# Module-level singleton — loaded once at import time.
+model_bundle: BaseModelBundle = create_model_bundle(
+    Path(__file__).resolve().parents[4] / "model_artifacts" / settings.ACTIVE_MODEL
+)

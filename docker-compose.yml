@@ -101,6 +101,17 @@ services:
     ports:
       - "5173:80"
 
+  streamlit:
+    build:
+      context: .
+      dockerfile: docker/streamlit/Dockerfile
+    image: streamlit
+    restart: always
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend
+
 
 volumes:
   app-db-data:
