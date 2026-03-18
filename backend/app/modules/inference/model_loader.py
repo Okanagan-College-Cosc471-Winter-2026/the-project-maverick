@@ -12,6 +12,8 @@ from typing import Any, ClassVar
 import joblib  # type: ignore[import-untyped]
 from xgboost import XGBRegressor
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -37,7 +39,7 @@ class ModelManager:
     def __init__(self) -> None:
         """Initialize model paths."""
         if self._model is None:
-            base_path = Path(__file__).resolve().parents[4] / "model_artifacts" / "stock_prediction_xgb_global"
+            base_path = Path(__file__).resolve().parents[4] / "model_artifacts" / settings.ACTIVE_MODEL
             self._model_path = base_path
 
     def load_model(self) -> None:
