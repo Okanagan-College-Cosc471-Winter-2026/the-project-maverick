@@ -7,6 +7,7 @@ from datetime import timedelta
 import pandas as pd
 from sqlalchemy.orm import Session
 
+from app.modules.inference.confidence import calculate_confidence
 from app.modules.inference.features import prepare_features_for_prediction
 from app.modules.inference.model_loader import model_manager
 from app.modules.inference.schemas import PredictionResponse
@@ -91,12 +92,15 @@ class InferenceService:
         split_date = metadata.get("split_date", "unknown")
         model_version = f"xgboost-v1-{split_date}"
 
+        # 9. Calculate confidence score
+        confidence = calculate_confidence(features, predicted_return)
+
         return PredictionResponse(
             symbol=symbol,
             current_price=current_price,
             predicted_price=predicted_price,
             predicted_return=predicted_return * 100,  # Convert to percentage
             prediction_date=prediction_date,
-            confidence=None,  # TODO: Add confidence calculation
+            confidence=round(confidence, 4),
             model_version=model_version,
         )

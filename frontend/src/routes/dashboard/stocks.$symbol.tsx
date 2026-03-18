@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ohlcQueryOptions, stockQueryOptions } from "@/hooks/useMarket"
 import { InferenceService } from "@/services"
+import type { PredictionResponse } from "@/types"
 
 export const Route = createFileRoute("/dashboard/stocks/$symbol")({
   component: StockDetail,
@@ -61,7 +62,7 @@ function ChartTab({ symbol }: { symbol: string }) {
   const { data: stock } = useSuspenseQuery(stockQueryOptions(symbol))
   const [showPrediction, setShowPrediction] = useState(false)
   const [chartType, setChartType] = useState<ChartType>("line")
-  const [prediction, setPrediction] = useState<any>(null)
+  const [prediction, setPrediction] = useState<PredictionResponse | null>(null)
   const [loadingPrediction, setLoadingPrediction] = useState(false)
   const [timeRange, setTimeRange] = useState<"1D" | "1W" | "1M" | "ALL">("ALL")
 
@@ -160,6 +161,19 @@ function ChartTab({ symbol }: { symbol: string }) {
                     {prediction.predicted_return.toFixed(2)}%
                   </div>
                 </div>
+                {prediction.confidence != null && (
+                  <>
+                    <div className="h-10 w-px bg-border" />
+                    <div className="text-right">
+                      <div className="text-xs text-muted-foreground">
+                        Confidence
+                      </div>
+                      <div className="text-lg font-bold">
+                        {(prediction.confidence * 100).toFixed(0)}%
+                      </div>
+                    </div>
+                  </>
+                )}
               </>
             )}
 

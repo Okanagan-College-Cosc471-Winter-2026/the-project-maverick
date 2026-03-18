@@ -1,7 +1,7 @@
 import type { CancelablePromise } from "@/client/core/CancelablePromise"
 import { OpenAPI } from "@/client/core/OpenAPI"
 import { request as __request } from "@/client/core/request"
-import type { PredictionRequest, PredictionResponse } from "@/types"
+import type { PredictionResponse } from "@/types"
 
 /**
  * Get prediction for a stock.
@@ -21,11 +21,4 @@ export function predictStock(
       422: "Validation Error",
     },
   })
-}
-
-// Legacy method for backwards compatibility
-export function predict(
-  requestBody: PredictionRequest,
-): CancelablePromise<PredictionResponse> {
-  return predictStock(requestBody.symbol)
 }
