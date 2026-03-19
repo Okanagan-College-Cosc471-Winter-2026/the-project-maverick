@@ -1,25 +1,68 @@
-"""
-Market module database queries.
-"""
+"""Market module database queries against market and market_intraday schemas."""
 
+from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.modules.market.models import DailyPrice, Stock
+
+@dataclass
+class StockRecord:
+    symbol: str
+    name: str
+    sector: str | None
+    industry: str | None
+    exchange: str | None
 
 
-def get_active_stocks(session: Session) -> list[Stock]:
-    """Return all active stocks, ordered by symbol."""
-    stmt = select(Stock).where(Stock.is_active.is_(True)).order_by(Stock.symbol)
-    return list(session.scalars(stmt).all())
+def get_active_stocks(session: Session) -> list[StockRecord]:
+    """Return all active stocks ordered by symbol."""
+    rows = session.execute(
+        text(
+            """
+            SELECT symbol, name, sector, industry, exchange
+            FROM market.stocks
+            WHERE is_active = TRUE
+            ORDER BY symbol
+            """
+        )
+    ).fetchall()
+    return [
+        StockRecord(
+            symbol=row.symbol,
+            name=row.name,
+            sector=row.sector,
+            industry=row.industry,
+            exchange=row.exchange,
+        )
+        for row in rows
+    ]
 
 
-def get_stock(session: Session, symbol: str) -> Stock | None:
+def get_stock(session: Session, symbol: str) -> StockRecord | None:
     """Return a single stock by symbol, or None."""
-    return session.get(Stock, symbol.upper())
+    row = session.execute(
+        text(
+            """
+            SELECT symbol, name, sector, industry, exchange
+            FROM market.stocks
+            WHERE symbol = :symbol
+            LIMIT 1
+            """
+        ),
+        {"symbol": symbol.upper()},
+    ).fetchone()
+    if row is None:
+        return None
+    return StockRecord(
+        symbol=row.symbol,
+        name=row.name,
+        sector=row.sector,
+        industry=row.industry,
+        exchange=row.exchange,
+    )
 
 
 def get_daily_prices(
@@ -28,55 +71,68 @@ def get_daily_prices(
     start: date,
     end: date,
 ) -> list[Any]:
-    """Return daily OHLC rows for a symbol within a date range."""
-    from sqlalchemy import text
-    query = text(f"""
-        SELECT date::timestamp as date,
-               open::numeric as open,
-               high::numeric as high,
-               low::numeric as low,
-               close::numeric as close,
-               volume::numeric as volume
-        FROM market."{symbol.upper()}"
-        WHERE date::timestamp >= :start AND date::timestamp <= :end
-        ORDER BY date ASC
-    """)
-    return list(session.execute(query, {"start": start, "end": end}).fetchall())
+    """Return OHLC rows for a symbol within a date range."""
+    return list(
+        session.execute(
+            text(
+                """
+                SELECT
+                    ts AS date,
+                    open, high, low, close, volume
+                FROM market_intraday.prices_5min
+                WHERE symbol = :symbol
+                  AND ts::date >= :start
+                  AND ts::date <= :end
+                ORDER BY ts ASC
+                """
+            ),
+            {"symbol": symbol.upper(), "start": start, "end": end},
+        ).fetchall()
+    )
 
 
 def get_coverage(session: Session, symbol: str) -> dict[str, Any]:
-    """Return the earliest date, latest date, and row count for a symbol's table."""
-    from sqlalchemy import text
+    """Return earliest date, latest date, and row count for a symbol."""
     row = session.execute(
-        text(f'SELECT MIN(date)::date, MAX(date)::date, COUNT(*) FROM market."{symbol.upper()}"')
+        text(
+            """
+            SELECT
+                MIN(ts)::date AS data_from,
+                MAX(ts)::date AS data_to,
+                COUNT(*) AS rows
+            FROM market_intraday.prices_5min
+            WHERE symbol = :symbol
+            """
+        ),
+        {"symbol": symbol.upper()},
     ).one()
     return {"data_from": row[0], "data_to": row[1], "rows": row[2]}
 
 
 def get_ohlc(session: Session, symbol: str, days: int = 365) -> list[Any]:
     """
-    Return recent OHLC data for a symbol.
+    Return recent OHLC data for a symbol, oldest first.
 
     Args:
         session: Database session
         symbol: Stock symbol
-        days: Number of days of history to retrieve (default 365)
+        days: Number of calendar days of history (default 365)
 
     Returns:
-        List of DailyPrice-like records, ordered by date ascending
+        List of rows with date, open, high, low, close, volume — ascending by ts
     """
-    from sqlalchemy import text
-    query = text(f"""
-        SELECT date::timestamp as date,
-               open::numeric as open,
-               high::numeric as high,
-               low::numeric as low,
-               close::numeric as close,
-               volume::numeric as volume
-        FROM market."{symbol.upper()}"
-        ORDER BY date DESC
-        LIMIT :limit
-    """)
-    # Get results and reverse to have oldest first
-    results = session.execute(query, {"limit": days * 30}).fetchall()
-    return list(reversed(results))
+    results = session.execute(
+        text(
+            """
+            SELECT
+                ts AS date,
+                open, high, low, close, volume
+            FROM market_intraday.prices_5min
+            WHERE symbol = :symbol
+              AND ts >= NOW() - (:days || ' days')::interval
+            ORDER BY ts ASC
+            """
+        ),
+        {"symbol": symbol.upper(), "days": days},
+    ).fetchall()
+    return list(results)

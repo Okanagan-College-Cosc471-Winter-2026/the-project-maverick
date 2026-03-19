@@ -43,7 +43,8 @@ class MarketService:
         Timestamps are returned as Unix seconds (UTC midnight)
         which is what TradingView Lightweight Charts expects.
         """
-        end = date.today()
+        coverage = crud.get_coverage(session, symbol)
+        end = coverage["data_to"] or date.today()
         start = end - timedelta(days=days)
 
         rows = crud.get_daily_prices(session, symbol, start, end)

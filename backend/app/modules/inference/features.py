@@ -87,3 +87,32 @@ def prepare_features_for_prediction(
     df_with_features["ticker_id"] = ticker_id
     latest_features = df_with_features.iloc[[-1]].copy().fillna(0)
     return latest_features[feature_cols_order].astype("float32")
+
+
+def prepare_features_for_next_day(
+    df: pd.DataFrame,
+    feature_names: list[str],
+) -> pd.DataFrame:
+    """
+    Validate and order a pre-built feature DataFrame for NextDayPathBundle.
+
+    The caller is responsible for building `df` with all 514 aggregated features
+    (daily stats, premarket data, intraday 15-min slot statistics).  This function
+    only validates column presence, selects + orders them, and casts to float32.
+
+    Args:
+        df: DataFrame with at least one row and all 514 required columns.
+        feature_names: Ordered list of feature names from feature_names.json.
+
+    Returns:
+        Single-row DataFrame shaped (1, 514) ready for xgboost.DMatrix.
+
+    Raises:
+        KeyError: If any required column is missing from df.
+    """
+    missing = [col for col in feature_names if col not in df.columns]
+    if missing:
+        raise KeyError(
+            f"Missing {len(missing)} required features for next-day model: {missing[:10]}{'…' if len(missing) > 10 else ''}"
+        )
+    return df[feature_names].iloc[[-1]].astype("float32")
