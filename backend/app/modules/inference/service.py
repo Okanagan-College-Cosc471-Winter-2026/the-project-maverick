@@ -95,9 +95,9 @@ class InferenceService:
         if stock is None:
             raise ValueError(f"Stock not found: {symbol}")
 
-        # 2. Fetch data — placeholder; real aggregation pipeline is a follow-on task
-        ohlc_data = crud.get_ohlc(session, symbol, days=10)
-        if not ohlc_data:
+        # 2. Fetch 75 trading days of 15-min bars (needed for 60d rolling features)
+        bars = crud.get_bars_for_features(session, symbol, trading_days=75)
+        if not bars:
             raise ValueError(f"No OHLC data available for {symbol}")
 
         df = pd.DataFrame(
@@ -109,8 +109,10 @@ class InferenceService:
                     "low": row.low,
                     "close": row.close,
                     "volume": row.volume,
+                    "trade_count": row.trade_count,
+                    "vwap": row.vwap,
                 }
-                for row in ohlc_data
+                for row in bars
             ]
         )
 

@@ -1,4 +1,4 @@
-"""Market module database queries against market and market_intraday schemas."""
+"""Market module database queries against the dw warehouse schema."""
 
 from dataclasses import dataclass
 from datetime import date
@@ -6,6 +6,24 @@ from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+STOCK_METADATA_QUERY = text(
+    """
+    SELECT DISTINCT
+        i.symbol AS symbol,
+        COALESCE(c.company_name, i.name, i.symbol) AS name,
+        c.sector AS sector,
+        c.industry AS industry,
+        e.exchange_code AS exchange
+    FROM dw.fact_15min_stock_price f
+    JOIN dw.dim_instrument i
+      ON f.fk_instrument_id = i.sk_instrument_id
+    LEFT JOIN dw.dim_company c
+      ON f.fk_company_id = c.sk_company_id
+    LEFT JOIN dw.dim_exchange e
+      ON f.fk_exchange_id = e.sk_exchange_id
+    """
+)
 
 
 @dataclass
@@ -18,14 +36,13 @@ class StockRecord:
 
 
 def get_active_stocks(session: Session) -> list[StockRecord]:
-    """Return all active stocks ordered by symbol."""
+    """Return all active stocks from the warehouse dimensions, ordered by symbol."""
     rows = session.execute(
         text(
-            """
-            SELECT symbol, name, sector, industry, exchange
-            FROM market.stocks
-            WHERE is_active = TRUE
-            ORDER BY symbol
+            f"""
+            {STOCK_METADATA_QUERY.text}
+            WHERE COALESCE(c.is_active, TRUE) IS TRUE
+            ORDER BY i.symbol
             """
         )
     ).fetchall()
@@ -45,10 +62,10 @@ def get_stock(session: Session, symbol: str) -> StockRecord | None:
     """Return a single stock by symbol, or None."""
     row = session.execute(
         text(
-            """
-            SELECT symbol, name, sector, industry, exchange
-            FROM market.stocks
-            WHERE symbol = :symbol
+            f"""
+            {STOCK_METADATA_QUERY.text}
+            WHERE i.symbol = :symbol
+            ORDER BY i.symbol
             LIMIT 1
             """
         ),
@@ -77,13 +94,19 @@ def get_daily_prices(
             text(
                 """
                 SELECT
-                    ts AS date,
-                    open, high, low, close, volume
-                FROM market_intraday.prices_5min
-                WHERE symbol = :symbol
-                  AND ts::date >= :start
-                  AND ts::date <= :end
-                ORDER BY ts ASC
+                    d.datetime AS date,
+                    f.open_price::numeric AS open,
+                    f.high_price::numeric AS high,
+                    f.low_price::numeric AS low,
+                    f.close_price::numeric AS close,
+                    f.volume::numeric AS volume
+                FROM dw.fact_15min_stock_price f
+                JOIN dw.dim_date d ON f.fk_date_id = d.sk_date_id
+                JOIN dw.dim_instrument i ON f.fk_instrument_id = i.sk_instrument_id
+                WHERE i.symbol = :symbol
+                  AND d.date >= :start
+                  AND d.date <= :end
+                ORDER BY d.datetime ASC
                 """
             ),
             {"symbol": symbol.upper(), "start": start, "end": end},
@@ -97,11 +120,13 @@ def get_coverage(session: Session, symbol: str) -> dict[str, Any]:
         text(
             """
             SELECT
-                MIN(ts)::date AS data_from,
-                MAX(ts)::date AS data_to,
-                COUNT(*) AS rows
-            FROM market_intraday.prices_5min
-            WHERE symbol = :symbol
+                MIN(d.date)::date,
+                MAX(d.date)::date,
+                COUNT(*)
+            FROM dw.fact_15min_stock_price f
+            JOIN dw.dim_date d ON f.fk_date_id = d.sk_date_id
+            JOIN dw.dim_instrument i ON f.fk_instrument_id = i.sk_instrument_id
+            WHERE i.symbol = :symbol
             """
         ),
         {"symbol": symbol.upper()},
@@ -109,30 +134,67 @@ def get_coverage(session: Session, symbol: str) -> dict[str, Any]:
     return {"data_from": row[0], "data_to": row[1], "rows": row[2]}
 
 
-def get_ohlc(session: Session, symbol: str, days: int = 365) -> list[Any]:
+def get_bars_for_features(session: Session, symbol: str, trading_days: int = 75) -> list[Any]:
     """
-    Return recent OHLC data for a symbol, oldest first.
-
-    Args:
-        session: Database session
-        symbol: Stock symbol
-        days: Number of calendar days of history (default 365)
-
-    Returns:
-        List of rows with date, open, high, low, close, volume — ascending by ts
+    Return the most recent `trading_days` worth of 15-min bars for feature engineering,
+    including trade_count and vwap.  Bars are returned oldest-first.
     """
     results = session.execute(
         text(
             """
-            SELECT
-                ts AS date,
-                open, high, low, close, volume
-            FROM market_intraday.prices_5min
-            WHERE symbol = :symbol
-              AND ts >= NOW() - (:days || ' days')::interval
-            ORDER BY ts ASC
+            SELECT date, open, high, low, close, volume, trade_count, vwap FROM (
+                SELECT
+                    d.datetime AS date,
+                    f.open_price::float AS open,
+                    f.high_price::float AS high,
+                    f.low_price::float AS low,
+                    f.close_price::float AS close,
+                    f.volume::float AS volume,
+                    COALESCE(f.trade_count, 0)::float AS trade_count,
+                    COALESCE(f.vwap, f.close_price)::float AS vwap
+                FROM dw.fact_15min_stock_price f
+                JOIN dw.dim_date d ON f.fk_date_id = d.sk_date_id
+                JOIN dw.dim_instrument i ON f.fk_instrument_id = i.sk_instrument_id
+                WHERE i.symbol = :symbol
+                ORDER BY d.datetime DESC
+                LIMIT :limit
+            ) sub
+            ORDER BY date ASC
             """
         ),
-        {"symbol": symbol.upper(), "days": days},
+        {"symbol": symbol.upper(), "limit": trading_days * 55},
+    ).fetchall()
+    return list(results)
+
+
+def get_ohlc(session: Session, symbol: str, days: int = 365) -> list[Any]:
+    """
+    Return recent OHLC data for a symbol, oldest first.
+
+    Fetches the latest `days * 26` 15-min bars regardless of wall-clock date,
+    so stale datasets still return data.
+    """
+    results = session.execute(
+        text(
+            """
+            SELECT date, open, high, low, close, volume FROM (
+                SELECT
+                    d.datetime AS date,
+                    f.open_price::numeric AS open,
+                    f.high_price::numeric AS high,
+                    f.low_price::numeric AS low,
+                    f.close_price::numeric AS close,
+                    f.volume::numeric AS volume
+                FROM dw.fact_15min_stock_price f
+                JOIN dw.dim_date d ON f.fk_date_id = d.sk_date_id
+                JOIN dw.dim_instrument i ON f.fk_instrument_id = i.sk_instrument_id
+                WHERE i.symbol = :symbol
+                ORDER BY d.datetime DESC
+                LIMIT :limit
+            ) sub
+            ORDER BY date ASC
+            """
+        ),
+        {"symbol": symbol.upper(), "limit": days * 26},
     ).fetchall()
     return list(results)

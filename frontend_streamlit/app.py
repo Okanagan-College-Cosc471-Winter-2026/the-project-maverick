@@ -126,16 +126,23 @@ def format_snapshot_table(df: pd.DataFrame) -> None:
 
 
 def prediction_metrics(payload: dict) -> None:
-    cols = st.columns(5)
+    path = payload.get("path", [])
+    end_price = path[-1]["pred_close"] if path else payload["current_price"]
+    full_return = payload.get("predicted_full_day_return", 0.0)
+    direction = payload.get("predicted_direction", "—")
+
+    cols = st.columns(4)
     cols[0].metric("Latest Price", f"${payload['current_price']:.2f}")
-    cols[1].metric("Forecast Price", f"${payload['predicted_price']:.2f}")
-    cols[2].metric("Predicted Return", f"{payload['predicted_return']:.2f}%")
-    confidence = payload.get("confidence")
-    cols[3].metric("Confidence", "N/A" if confidence is None else f"{confidence:.2f}")
-    cols[4].metric("Model Version", payload["model_version"])
+    cols[1].metric("Predicted EOD Price", f"${end_price:.2f}")
+    cols[2].metric(
+        "Predicted Full-Day Return",
+        f"{full_return:.2f}%",
+        delta=f"{'▲' if direction == 'up' else '▼'} {direction}",
+    )
+    cols[3].metric("Model Version", payload["model_version"])
     st.caption(
-        f"Forecast is anchored to the latest available bar in the dataset. "
-        f"Model horizon reference: {payload['prediction_date']}"
+        f"26-bar 15-min path prediction for {payload['prediction_date'][:10]}. "
+        f"Anchored to latest available bar."
     )
 
 
@@ -166,27 +173,34 @@ def build_price_chart(df: pd.DataFrame, title: str, prediction: dict | None = No
         )
     )
     if prediction:
-        fig.add_trace(
-            go.Scatter(
-                x=[df["date"].iloc[-1]],
-                y=[prediction["predicted_price"]],
-                mode="markers",
-                name="Prediction",
-                marker={"size": 10, "color": "#f59e0b", "symbol": "diamond"},
+        path = prediction.get("path", [])
+        if path:
+            pred_date = prediction.get("prediction_date", "")[:10]
+            path_x = [f"{pred_date} {bar['bar_time']}:00" for bar in path]
+            path_y = [bar["pred_close"] for bar in path]
+            fig.add_trace(
+                go.Scatter(
+                    x=path_x,
+                    y=path_y,
+                    mode="lines+markers",
+                    name="Predicted Path",
+                    line={"color": "#f59e0b", "width": 2, "dash": "dot"},
+                    marker={"size": 4, "color": "#f59e0b"},
+                )
             )
-        )
-        fig.add_annotation(
-            x=df["date"].iloc[-1],
-            y=prediction["predicted_price"],
-            text=f"Pred ${prediction['predicted_price']:.2f}",
-            showarrow=True,
-            arrowhead=2,
-            ax=32,
-            ay=-40,
-            bgcolor="rgba(245,158,11,0.12)",
-            bordercolor="#f59e0b",
-            font={"size": 11, "color": "#92400e"},
-        )
+            end_price = path_y[-1]
+            fig.add_annotation(
+                x=path_x[-1],
+                y=end_price,
+                text=f"Pred EOD ${end_price:.2f}",
+                showarrow=True,
+                arrowhead=2,
+                ax=32,
+                ay=-40,
+                bgcolor="rgba(245,158,11,0.12)",
+                bordercolor="#f59e0b",
+                font={"size": 11, "color": "#92400e"},
+            )
 
     latest_close = float(df["close"].iloc[-1])
     fig.update_layout(
