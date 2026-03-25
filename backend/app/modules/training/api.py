@@ -37,12 +37,12 @@ _job_meta: dict[str, Any] = {
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
 class LogLine(BaseModel):
-    level: str   = "INFO"    # INFO | WARN | ERROR | SUCCESS
+    level: str = "INFO"  # INFO | WARN | ERROR | SUCCESS
     message: str
-    job_id: str  = ""
+    job_id: str = ""
     run_date: str = ""
-    step: str    = ""        # extract | feature_eng | hpo | train | sync | done
-    progress: float = -1     # 0-100, or -1 = unknown
+    step: str = ""  # extract | feature_eng | hpo | train | sync | done
+    progress: float = -1  # 0-100, or -1 = unknown
 
 
 class JobStart(BaseModel):
@@ -65,12 +65,12 @@ def _broadcast(entry: dict[str, Any]) -> None:
 
 def _make_entry(line: LogLine) -> dict[str, Any]:
     return {
-        "ts":       _now_utc(),
-        "level":    line.level,
-        "message":  line.message,
-        "step":     line.step,
+        "ts": _now_utc(),
+        "level": line.level,
+        "message": line.message,
+        "step": line.step,
         "progress": line.progress,
-        "job_id":   line.job_id  or _job_meta.get("job_id", ""),
+        "job_id": line.job_id or _job_meta.get("job_id", ""),
         "run_date": line.run_date or _job_meta.get("run_date", ""),
     }
 
@@ -86,16 +86,18 @@ def start_job(meta: JobStart) -> dict[str, bool]:
     global _job_meta
     _log_buffer.clear()
     _job_meta = {
-        "status":     "running",
-        "job_id":     meta.job_id,
+        "status": "running",
+        "job_id": meta.job_id,
         "started_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
-        "run_date":   meta.run_date,
+        "run_date": meta.run_date,
     }
-    entry = _make_entry(LogLine(
-        level="SUCCESS",
-        message=f"Job started — run_date={meta.run_date}  job_id={meta.job_id}",
-        step="init",
-    ))
+    entry = _make_entry(
+        LogLine(
+            level="SUCCESS",
+            message=f"Job started — run_date={meta.run_date}  job_id={meta.job_id}",
+            step="init",
+        )
+    )
     _log_buffer.append(entry)
     _broadcast(entry)
     return {"ok": True}
@@ -119,7 +121,9 @@ def push_log(line: LogLine) -> dict[str, bool]:
 @router.post("/clear")
 def clear_log() -> dict[str, bool]:
     _log_buffer.clear()
-    _job_meta.update({"status": "idle", "job_id": None, "started_at": None, "run_date": None})
+    _job_meta.update(
+        {"status": "idle", "job_id": None, "started_at": None, "run_date": None}
+    )
     return {"ok": True}
 
 
@@ -157,7 +161,7 @@ async def stream_logs() -> StreamingResponse:
         generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control":     "no-cache",
+            "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",  # tells nginx not to buffer SSE
         },
     )

@@ -38,7 +38,9 @@ def ensure_snapshot_dir() -> Path:
 
 
 class SnapshotRequest(BaseModel):
-    ticker: str = "ALL"  # "ALL" will query all 29 stocks, or provide specific like "AAPL"
+    ticker: str = (
+        "ALL"  # "ALL" will query all 29 stocks, or provide specific like "AAPL"
+    )
     start_date: str | None = None
     end_date: str | None = None
     format: str = "parquet"  # "parquet", "csv", or "both"
@@ -53,11 +55,13 @@ def get_db_engine() -> Engine:
 def get_all_tables() -> list[str]:
     """Retrieves all data tables from the 'market' schema."""
     engine = get_db_engine()
-    query = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'market'"
+    query = (
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'market'"
+    )
     with engine.connect() as conn:
         result = conn.execute(text(query))
         # Exclude metadata tables
-        tables = [row[0] for row in result if row[0] not in ('daily_prices', 'stocks')]
+        tables = [row[0] for row in result if row[0] not in ("daily_prices", "stocks")]
     return tables
 
 
@@ -72,9 +76,13 @@ def build_snapshot(req: SnapshotRequest) -> dict[str, Any]:
         engine = get_db_engine()
         snapshot_dir = ensure_snapshot_dir()
 
-        tickers_to_process = get_all_tables() if req.ticker.upper() == "ALL" else [req.ticker]
+        tickers_to_process = (
+            get_all_tables() if req.ticker.upper() == "ALL" else [req.ticker]
+        )
         if not tickers_to_process:
-            raise HTTPException(status_code=404, detail="No valid ticker tables found in database.")
+            raise HTTPException(
+                status_code=404, detail="No valid ticker tables found in database."
+            )
 
         all_dfs = []
         for tick in tickers_to_process:
@@ -96,19 +104,23 @@ def build_snapshot(req: SnapshotRequest) -> dict[str, Any]:
 
             if not df.empty:
                 # Keep track of which stock this data belongs to
-                if 'symbol' not in df.columns:
-                    df['symbol'] = tick
+                if "symbol" not in df.columns:
+                    df["symbol"] = tick
                 all_dfs.append(df)
 
         if not all_dfs:
-            raise HTTPException(status_code=404, detail="No data found for requested parameters.")
+            raise HTTPException(
+                status_code=404, detail="No data found for requested parameters."
+            )
 
         final_df = pd.concat(all_dfs, ignore_index=True)
         timestamp_label = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-        results = {}
+        results: dict[str, Any] = {}
 
         # 2. Build snapshot files
-        formats_to_build = ["parquet", "csv"] if req.format == "both" else [req.format.lower()]
+        formats_to_build = (
+            ["parquet", "csv"] if req.format == "both" else [req.format.lower()]
+        )
         for fmt in formats_to_build:
             filename = f"snapshot_{req.ticker}_{timestamp_label}.{fmt}"
             filepath = str(snapshot_dir / filename)
@@ -116,19 +128,21 @@ def build_snapshot(req: SnapshotRequest) -> dict[str, Any]:
             if fmt == "parquet":
                 table = pa.Table.from_pandas(final_df)
                 pq.write_table(table, filepath)
-                results['parquet_file'] = filename
+                results["parquet_file"] = filename
             elif fmt == "csv":
                 final_df.to_csv(filepath, index=False)
-                results['csv_file'] = filename
+                results["csv_file"] = filename
 
         t1 = time.time()
-        results.update({
-            'status': "success",
-            'tickers_processed': len(tickers_to_process),
-            'total_rows_extracted': len(final_df),
-            'extraction_dir': str(snapshot_dir),
-            'time_taken_sec': round(t1 - t0, 3)
-        })
+        results.update(
+            {
+                "status": "success",
+                "tickers_processed": len(tickers_to_process),
+                "total_rows_extracted": len(final_df),
+                "extraction_dir": str(snapshot_dir),
+                "time_taken_sec": round(t1 - t0, 3),
+            }
+        )
         return results
 
     except Exception as e:
@@ -162,5 +176,5 @@ def download_snapshot(filename: str) -> FileResponse:
     return FileResponse(
         path=str(filepath),
         filename=filename,
-        media_type='application/octet-stream',
+        media_type="application/octet-stream",
     )

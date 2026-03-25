@@ -36,8 +36,8 @@ class PredictionResponse(BaseModel):
 class NextDayBarPrediction(BaseModel):
     """Single 15-min bar in a next-day path prediction."""
 
-    bar_idx: int    # 0–25
-    bar_time: str   # "09:30", "09:45", …
+    bar_idx: int  # 0–25
+    bar_time: str  # "09:30", "09:45", …
     pred_close: float
 
 
@@ -46,8 +46,8 @@ class NextDayPredictionResponse(BaseModel):
 
     symbol: str
     current_price: float
-    prediction_date: datetime           # next trading session date
-    predicted_full_day_return: float    # percentage, bar 25 vs current_price
-    predicted_direction: str            # "up" | "down"
-    path: list[NextDayBarPrediction]    # 26 bars
+    prediction_date: datetime  # next trading session date
+    predicted_full_day_return: float  # percentage, bar 25 vs current_price
+    predicted_direction: str  # "up" | "down"
+    path: list[NextDayBarPrediction]  # 26 bars
     model_version: str
