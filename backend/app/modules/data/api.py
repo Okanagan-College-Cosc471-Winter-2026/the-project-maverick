@@ -77,16 +77,19 @@ def build_snapshot(req: SnapshotRequest):
         for tick in tickers_to_process:
             query = f'SELECT * FROM market."{tick}"'
             conditions = []
+            params: dict[str, str] = {}
             if req.start_date:
-                conditions.append(f"date >= '{req.start_date}'")
+                conditions.append("date >= :start_date")
+                params["start_date"] = req.start_date
             if req.end_date:
-                conditions.append(f"date <= '{req.end_date}'")
+                conditions.append("date <= :end_date")
+                params["end_date"] = req.end_date
             if conditions:
                 query += " WHERE " + " AND ".join(conditions)
             query += " ORDER BY date ASC"
-            
+
             with engine.connect() as conn:
-                df = pd.read_sql(text(query), conn)
+                df = pd.read_sql(text(query), conn, params=params)
             
             if not df.empty:
                 # Keep track of which stock this data belongs to
