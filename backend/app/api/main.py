@@ -1,9 +1,9 @@
 from fastapi import APIRouter
 
 from app.api import utils
+from app.modules.data import api as data
 from app.modules.inference import api as inference
 from app.modules.market import api as market
-from app.modules.data import api as data
 from app.modules.training import api as training
 
 api_router = APIRouter()

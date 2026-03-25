@@ -31,9 +31,9 @@ def calculate_technical_indicators(df: pd.DataFrame, symbol: str) -> pd.DataFram
     frame["oc_spread"] = (frame["close"] - frame["open"]) / frame["open"].replace(0, np.nan)
 
     for window in [10, 20, 50, 100]:
-        frame[f"sma_{window}"] = grouped["close"].transform(lambda s: s.rolling(window).mean())
+        frame[f"sma_{window}"] = grouped["close"].transform(lambda s, w=window: s.rolling(w).mean())
         frame[f"ema_{window}"] = grouped["close"].transform(
-            lambda s: s.ewm(span=window, adjust=False).mean()
+            lambda s, w=window: s.ewm(span=w, adjust=False).mean()
         )
         frame[f"dist_sma_{window}"] = frame["close"] / frame[f"sma_{window}"] - 1.0
         frame[f"dist_ema_{window}"] = frame["close"] / frame[f"ema_{window}"] - 1.0
@@ -45,9 +45,9 @@ def calculate_technical_indicators(df: pd.DataFrame, symbol: str) -> pd.DataFram
     frame["macd_hist"] = frame["macd"] - frame["macd_signal"]
 
     for window in [10, 20, 60]:
-        frame[f"volatility_{window}"] = grouped["ret_1"].transform(lambda s: s.rolling(window).std())
-        roll_std = grouped["close"].transform(lambda s: s.rolling(window).std())
-        roll_mean = grouped["close"].transform(lambda s: s.rolling(window).mean())
+        frame[f"volatility_{window}"] = grouped["ret_1"].transform(lambda s, w=window: s.rolling(w).std())
+        roll_std = grouped["close"].transform(lambda s, w=window: s.rolling(w).std())
+        roll_mean = grouped["close"].transform(lambda s, w=window: s.rolling(w).mean())
         frame[f"bb_{window}_width"] = (4.0 * roll_std) / roll_mean
 
     delta = grouped["close"].diff()
