@@ -1,0 +1,26 @@
+Release Notes - "the-project-maverick" (v1.0.0)
+Release Date: 2026-03-25
+
+New Features:
+- Interactive web dashboard built with React 19, Vite, and TypeScript featuring Recharts and Lightweight Charts for stock data visualization.
+- Next-day 15-minute path prediction using an ensemble of 26 XGBoost models covering the full trading day at 15-minute intervals.
+- Confidence scores for each prediction point indicating model certainty.
+- Data snapshot export API supporting Parquet and CSV formats for offline analysis.
+- Training job management API for initiating, monitoring, and reviewing model training.
+- Streamlit alternative frontend for data exploration and quick inference testing.
+- Airflow DAGs for automated daily data snapshots and model training orchestration.
+- Automated CI/CD via GitHub Actions running Pytest, Ruff, and Mypy on every pull request.
+
+Bug Fixes:
+- Fixed SQL injection vulnerability in data snapshot date filtering by switching to parameterized queries.
+- Resolved CORS policy blocking browser-to-server API requests.
+- Fixed database column length truncation for stock identifiers longer than 6 characters.
+- Fixed React Query cache invalidation causing excessive re-renders and browser memory leaks.
+- Migrated market data queries from deprecated schema references to new market schema.
+
+Known Limitations:
+- WebSocket streaming for live updates is not yet implemented; the frontend polls via REST.
+- Predictions are only available for the 29 pre-configured stock symbols.
+- Model retraining requires manual trigger or Airflow scheduler; no automatic drift detection.
+
+Thank you to the entire team for delivering this release.
