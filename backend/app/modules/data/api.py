@@ -2,26 +2,37 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import os
+import tempfile
 import time
+from pathlib import Path
+
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from sqlalchemy import create_engine, text
-from dotenv import load_dotenv
 
 router = APIRouter()
-
-# --- Load Environment & Unified DB ---
-load_dotenv('/home/cosc-admin/the-project-maverick/.env')
 
 DB_USER = os.getenv("POSTGRES_USER", "postgres")
 DB_PASS = os.getenv("POSTGRES_PASSWORD", "changethis")
 DB_NAME = os.getenv("POSTGRES_DB", "app")
-DB_HOST = os.getenv("POSTGRES_HOST", "db")  # Important: in docker, host is 'db'
+DB_HOST = os.getenv("POSTGRES_SERVER") or os.getenv("POSTGRES_HOST", "db")
 DB_PORT = os.getenv("POSTGRES_PORT", "5432")
 
-SNAPSHOT_DIR = os.getenv("SNAPSHOT_DIR", "/data/datasets")  # Expected Host Mount Path
-os.makedirs(SNAPSHOT_DIR, exist_ok=True)
+def _default_snapshot_dir() -> Path:
+    # Use a writable directory by default (CI runners often disallow writing to `/data`).
+    return Path(tempfile.gettempdir()) / "the-project-maverick" / "snapshots"
+
+
+def get_snapshot_dir() -> Path:
+    raw = os.getenv("SNAPSHOT_DIR")
+    return Path(raw) if raw else _default_snapshot_dir()
+
+
+def ensure_snapshot_dir() -> Path:
+    snapshot_dir = get_snapshot_dir()
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    return snapshot_dir
 
 class SnapshotRequest(BaseModel):
     ticker: str = "ALL"  # "ALL" will query all 29 stocks, or provide specific like "AAPL"
@@ -56,6 +67,7 @@ def build_snapshot(req: SnapshotRequest):
     try:
         t0 = time.time()
         engine = get_db_engine()
+        snapshot_dir = ensure_snapshot_dir()
         
         tickers_to_process = get_all_tables() if req.ticker.upper() == "ALL" else [req.ticker]
         if not tickers_to_process:
@@ -93,7 +105,7 @@ def build_snapshot(req: SnapshotRequest):
         formats_to_build = ["parquet", "csv"] if req.format == "both" else [req.format.lower()]
         for fmt in formats_to_build:
             filename = f"snapshot_{req.ticker}_{timestamp_label}.{fmt}"
-            filepath = os.path.join(SNAPSHOT_DIR, filename)
+            filepath = str(snapshot_dir / filename)
             
             if fmt == "parquet":
                 table = pa.Table.from_pandas(final_df)
@@ -108,7 +120,7 @@ def build_snapshot(req: SnapshotRequest):
             'status': "success",
             'tickers_processed': len(tickers_to_process),
             'total_rows_extracted': len(final_df),
-            'extraction_dir': SNAPSHOT_DIR,
+            'extraction_dir': str(snapshot_dir),
             'time_taken_sec': round(t1 - t0, 3)
         })
         return results
@@ -120,24 +132,29 @@ def build_snapshot(req: SnapshotRequest):
 @router.get("/snapshots")
 def list_snapshots():
     """Lists all available generated snapshots in the unified directory."""
-    if not os.path.exists(SNAPSHOT_DIR):
-        return {"snapshots": [], "directory": SNAPSHOT_DIR}
+    snapshot_dir = get_snapshot_dir()
+    if not snapshot_dir.exists():
+        return {"snapshots": [], "directory": str(snapshot_dir)}
         
     snapshot_info = []
-    for f in os.listdir(SNAPSHOT_DIR):
-        fpath = os.path.join(SNAPSHOT_DIR, f)
-        if os.path.isfile(fpath):
-            size_mb = os.path.getsize(fpath) / (1024 * 1024)
+    for f in snapshot_dir.iterdir():
+        if f.is_file():
+            size_mb = f.stat().st_size / (1024 * 1024)
             snapshot_info.append({"filename": f, "size_mb": round(size_mb, 2)})
             
-    return {"directory": SNAPSHOT_DIR, "snapshots": snapshot_info}
+    return {"directory": str(snapshot_dir), "snapshots": snapshot_info}
 
 
 @router.get("/snapshots/download/{filename}")
 def download_snapshot(filename: str):
     """Serves a specific generated snapshot file for download over HTTP."""
-    filepath = os.path.join(SNAPSHOT_DIR, filename)
-    if not os.path.exists(filepath):
+    snapshot_dir = get_snapshot_dir()
+    filepath = snapshot_dir / filename
+    if not filepath.exists():
         raise HTTPException(status_code=404, detail="Snapshot file not found.")
         
-    return FileResponse(path=filepath, filename=filename, media_type='application/octet-stream')
+    return FileResponse(
+        path=str(filepath),
+        filename=filename,
+        media_type='application/octet-stream',
+    )
