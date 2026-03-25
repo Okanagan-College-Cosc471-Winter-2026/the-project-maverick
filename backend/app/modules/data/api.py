@@ -2,14 +2,15 @@ import os
 import tempfile
 import time
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
+import pyarrow as pa  # type: ignore[import-untyped]
+import pyarrow.parquet as pq  # type: ignore[import-untyped]
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import create_engine, text
+from sqlalchemy import Engine, create_engine, text
 
 router = APIRouter()
 
@@ -38,18 +39,18 @@ def ensure_snapshot_dir() -> Path:
 
 class SnapshotRequest(BaseModel):
     ticker: str = "ALL"  # "ALL" will query all 29 stocks, or provide specific like "AAPL"
-    start_date: str = None
-    end_date: str = None
+    start_date: str | None = None
+    end_date: str | None = None
     format: str = "parquet"  # "parquet", "csv", or "both"
 
 
-def get_db_engine():
+def get_db_engine() -> Engine:
     """Builds connection to current source, isolated for easy future swaps."""
     conn_str = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     return create_engine(conn_str)
 
 
-def get_all_tables():
+def get_all_tables() -> list[str]:
     """Retrieves all data tables from the 'market' schema."""
     engine = get_db_engine()
     query = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'market'"
@@ -61,7 +62,7 @@ def get_all_tables():
 
 
 @router.post("/build-snapshot")
-def build_snapshot(req: SnapshotRequest):
+def build_snapshot(req: SnapshotRequest) -> dict[str, Any]:
     """
     Extracts data from the active DB and saves a Parquet and/or CSV file
     to the unified unified snapshot directory. Can do single ticker or ALL.
@@ -135,7 +136,7 @@ def build_snapshot(req: SnapshotRequest):
 
 
 @router.get("/snapshots")
-def list_snapshots():
+def list_snapshots() -> dict[str, Any]:
     """Lists all available generated snapshots in the unified directory."""
     snapshot_dir = get_snapshot_dir()
     if not snapshot_dir.exists():
@@ -151,7 +152,7 @@ def list_snapshots():
 
 
 @router.get("/snapshots/download/{filename}")
-def download_snapshot(filename: str):
+def download_snapshot(filename: str) -> FileResponse:
     """Serves a specific generated snapshot file for download over HTTP."""
     snapshot_dir = get_snapshot_dir()
     filepath = snapshot_dir / filename

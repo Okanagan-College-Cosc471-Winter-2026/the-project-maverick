@@ -9,12 +9,10 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.modules.inference.features import prepare_features_for_next_day
-# from app.modules.inference.features import prepare_features_for_prediction  # legacy
 from app.modules.inference.model_loader import model_bundle
 from app.modules.inference.schemas import (
     NextDayBarPrediction,
     NextDayPredictionResponse,
-    # PredictionResponse,  # legacy single-horizon — commented out
 )
 from app.modules.market import crud
 

@@ -117,7 +117,9 @@ function TrainingMonitor() {
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Training Monitor</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Training Monitor
+          </h1>
           <p className="text-muted-foreground text-sm">
             Live log stream from DRAC XGBoost training jobs
           </p>
@@ -154,11 +156,15 @@ function TrainingMonitor() {
             <span
               className={`h-2.5 w-2.5 rounded-full ${STATUS_DOT[status.status] ?? "bg-slate-500"}`}
             />
-            <span className="text-sm font-medium capitalize">{status.status}</span>
+            <span className="text-sm font-medium capitalize">
+              {status.status}
+            </span>
           </div>
           {status.run_date && <Pill label="Run date" value={status.run_date} />}
           {status.job_id && <Pill label="Job ID" value={status.job_id} />}
-          {status.started_at && <Pill label="Started" value={status.started_at} />}
+          {status.started_at && (
+            <Pill label="Started" value={status.started_at} />
+          )}
           <Pill label="Lines" value={String(status.buffered_lines)} />
         </div>
       )}
@@ -241,13 +247,19 @@ function TrainingMonitor() {
                 <span className="w-16 shrink-0 select-none text-slate-600">
                   {l.ts}
                 </span>
-                <span className={`w-14 shrink-0 ${LEVEL_STYLES[l.level] ?? "text-slate-300"}`}>
+                <span
+                  className={`w-14 shrink-0 ${LEVEL_STYLES[l.level] ?? "text-slate-300"}`}
+                >
                   [{l.level}]
                 </span>
                 {l.step && (
-                  <span className="w-20 shrink-0 text-sky-500/70">{l.step}</span>
+                  <span className="w-20 shrink-0 text-sky-500/70">
+                    {l.step}
+                  </span>
                 )}
-                <span className={`flex-1 break-all ${LEVEL_STYLES[l.level] ?? "text-slate-300"}`}>
+                <span
+                  className={`flex-1 break-all ${LEVEL_STYLES[l.level] ?? "text-slate-300"}`}
+                >
                   {l.message}
                 </span>
                 {l.progress >= 0 && (
