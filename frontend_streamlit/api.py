@@ -70,3 +70,29 @@ def list_snapshots() -> dict[str, Any]:
 def download_snapshot(filename: str) -> io.BytesIO:
     payload = _request("GET", f"/data/snapshots/download/{filename}")
     return io.BytesIO(payload)
+
+
+# ---------------------------------------------------------------------------
+# Simulation / replay endpoints
+# ---------------------------------------------------------------------------
+
+def sim_session() -> dict[str, Any]:
+    """Return replay session metadata (step count, labels, tree info)."""
+    return _request("GET", "/simulation/session")
+
+
+def sim_base(symbol: str) -> dict[str, Any]:
+    """Full-day prediction from the base model (step_00, no warm refresh)."""
+    return _request("GET", f"/simulation/base/{symbol.upper()}")
+
+
+def sim_step(symbol: str, step: int) -> dict[str, Any]:
+    """Prediction from the warm-refreshed model at a specific 15-min step (0–25)."""
+    return _request("GET", f"/simulation/step/{symbol.upper()}/{step}")
+
+
+def sim_ohlc(symbol: str) -> list[dict[str, Any]]:
+    """Fetch real 15-min OHLC bars specifically for the 2026-03-23 simulation day."""
+    return _request("GET", f"/simulation/ohlc/{symbol.upper()}")
+
+
