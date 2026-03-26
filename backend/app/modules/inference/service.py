@@ -9,12 +9,10 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.modules.inference.features import prepare_features_for_next_day
-# from app.modules.inference.features import prepare_features_for_prediction  # legacy
 from app.modules.inference.model_loader import model_bundle
 from app.modules.inference.schemas import (
     NextDayBarPrediction,
     NextDayPredictionResponse,
-    # PredictionResponse,  # legacy single-horizon — commented out
 )
 from app.modules.market import crud
 
@@ -82,7 +80,9 @@ class InferenceService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _predict_next_day_path(session: Session, symbol: str) -> NextDayPredictionResponse:
+    def _predict_next_day_path(
+        session: Session, symbol: str
+    ) -> NextDayPredictionResponse:
         """
         Predict the full next-day 15-min price path using NextDayPathBundle.
 
@@ -144,7 +144,9 @@ class InferenceService:
         if isinstance(prediction_date, pd.Timestamp):
             prediction_date = prediction_date.to_pydatetime()
 
-        model_version = model_bundle.metadata.get("model_version", "nextday_15m_path_final")
+        model_version = model_bundle.metadata.get(
+            "model_version", "nextday_15m_path_final"
+        )
 
         return NextDayPredictionResponse(
             symbol=symbol,

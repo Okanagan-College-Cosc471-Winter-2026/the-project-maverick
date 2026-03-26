@@ -55,14 +55,18 @@ class LegacyXGBBundle(BaseModelBundle):
         self._model: xgboost.XGBRegressor = joblib.load(model_file)
 
         encoder_file = path / "encoder.pkl"
-        self.ticker_encoder = joblib.load(encoder_file) if encoder_file.exists() else None
+        self.ticker_encoder = (
+            joblib.load(encoder_file) if encoder_file.exists() else None
+        )
 
         logger.info(
             "LegacyXGBBundle loaded | horizon=%s | split_date=%s | features=%d | tickers=%s",
             self.metadata.get("horizon"),
             self.metadata.get("split_date"),
             len(self.feature_names),
-            len(self.ticker_encoder.classes_) if self.ticker_encoder is not None else "n/a",
+            len(self.ticker_encoder.classes_)
+            if self.ticker_encoder is not None
+            else "n/a",
         )
 
     def predict(self, feature_row: pd.DataFrame) -> float:

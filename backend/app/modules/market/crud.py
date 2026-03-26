@@ -1,4 +1,13 @@
-"""Market module database queries against market and market_intraday schemas."""
+"""Market module database queries against market and market_intraday schemas.
+
+The project supports two storage layouts:
+- Daily bars in `market.daily_prices` (date-based)
+- Intraday bars in `market_intraday.prices_5min` (timestamp-based)
+
+CI/unit tests seed `market.daily_prices`, while some deployments may use intraday
+data. The functions below transparently fall back to daily tables when the
+intraday table is unavailable.
+"""
 
 from dataclasses import dataclass
 from datetime import date
@@ -15,6 +24,22 @@ class StockRecord:
     sector: str | None
     industry: str | None
     exchange: str | None
+
+
+def _has_intraday_prices(session: Session) -> bool:
+    row = session.execute(
+        text(
+            """
+            SELECT EXISTS (
+              SELECT 1
+              FROM information_schema.tables
+              WHERE table_schema = 'market_intraday'
+                AND table_name = 'prices_5min'
+            )
+            """
+        )
+    ).one()
+    return bool(row[0])
 
 
 def get_active_stocks(session: Session) -> list[StockRecord]:
@@ -72,12 +97,12 @@ def get_daily_prices(
     end: date,
 ) -> list[Any]:
     """Return OHLC rows for a symbol within a date range."""
-    return list(
-        session.execute(
+    if _has_intraday_prices(session):
+        rows = session.execute(
             text(
                 """
                 SELECT
-                    ts AS date,
+                    ts::date AS date,
                     open, high, low, close, volume
                 FROM market_intraday.prices_5min
                 WHERE symbol = :symbol
@@ -88,24 +113,55 @@ def get_daily_prices(
             ),
             {"symbol": symbol.upper(), "start": start, "end": end},
         ).fetchall()
-    )
+    else:
+        rows = session.execute(
+            text(
+                """
+                SELECT
+                    date AS date,
+                    open, high, low, close, volume
+                FROM market.daily_prices
+                WHERE symbol = :symbol
+                  AND date >= :start
+                  AND date <= :end
+                ORDER BY date ASC
+                """
+            ),
+            {"symbol": symbol.upper(), "start": start, "end": end},
+        ).fetchall()
+    return list(rows)
 
 
 def get_coverage(session: Session, symbol: str) -> dict[str, Any]:
     """Return earliest date, latest date, and row count for a symbol."""
-    row = session.execute(
-        text(
-            """
-            SELECT
-                MIN(ts)::date AS data_from,
-                MAX(ts)::date AS data_to,
-                COUNT(*) AS rows
-            FROM market_intraday.prices_5min
-            WHERE symbol = :symbol
-            """
-        ),
-        {"symbol": symbol.upper()},
-    ).one()
+    if _has_intraday_prices(session):
+        row = session.execute(
+            text(
+                """
+                SELECT
+                    MIN(ts)::date AS data_from,
+                    MAX(ts)::date AS data_to,
+                    COUNT(*) AS rows
+                FROM market_intraday.prices_5min
+                WHERE symbol = :symbol
+                """
+            ),
+            {"symbol": symbol.upper()},
+        ).one()
+    else:
+        row = session.execute(
+            text(
+                """
+                SELECT
+                    MIN(date) AS data_from,
+                    MAX(date) AS data_to,
+                    COUNT(*) AS rows
+                FROM market.daily_prices
+                WHERE symbol = :symbol
+                """
+            ),
+            {"symbol": symbol.upper()},
+        ).one()
     return {"data_from": row[0], "data_to": row[1], "rows": row[2]}
 
 
@@ -121,18 +177,34 @@ def get_ohlc(session: Session, symbol: str, days: int = 365) -> list[Any]:
     Returns:
         List of rows with date, open, high, low, close, volume — ascending by ts
     """
-    results = session.execute(
-        text(
-            """
-            SELECT
-                ts AS date,
-                open, high, low, close, volume
-            FROM market_intraday.prices_5min
-            WHERE symbol = :symbol
-              AND ts >= NOW() - (:days || ' days')::interval
-            ORDER BY ts ASC
-            """
-        ),
-        {"symbol": symbol.upper(), "days": days},
-    ).fetchall()
+    if _has_intraday_prices(session):
+        results = session.execute(
+            text(
+                """
+                SELECT
+                    ts::date AS date,
+                    open, high, low, close, volume
+                FROM market_intraday.prices_5min
+                WHERE symbol = :symbol
+                  AND ts::date >= (CURRENT_DATE - (:days || ' days')::interval)::date
+                ORDER BY ts ASC
+                """
+            ),
+            {"symbol": symbol.upper(), "days": days},
+        ).fetchall()
+    else:
+        results = session.execute(
+            text(
+                """
+                SELECT
+                    date AS date,
+                    open, high, low, close, volume
+                FROM market.daily_prices
+                WHERE symbol = :symbol
+                  AND date >= (CURRENT_DATE - (:days || ' days')::interval)::date
+                ORDER BY date ASC
+                """
+            ),
+            {"symbol": symbol.upper(), "days": days},
+        ).fetchall()
     return list(results)
