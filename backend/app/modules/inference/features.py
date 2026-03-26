@@ -89,30 +89,198 @@ def prepare_features_for_prediction(
     return latest_features[feature_cols_order].astype("float32")
 
 
+def _build_daily_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute all 514 next-day model features from a DataFrame of raw 15-min bars.
+
+    Input columns required: date, open, high, low, close, volume, trade_count, vwap
+    Returns one row per complete trading day, indexed by trading_date.
+    """
+    df = df.copy()
+    df["ts"] = pd.to_datetime(df["date"])
+    df = df.sort_values("ts").reset_index(drop=True)
+
+    # Trading date = calendar date of the bar
+    df["trading_date"] = df["ts"].dt.normalize()
+    total_min = df["ts"].dt.hour * 60 + df["ts"].dt.minute
+
+    # Regular session: 09:30 (570) to 15:45 (945) inclusive
+    df["is_regular"] = (total_min >= 570) & (total_min <= 945)
+    # Premarket: anything before 09:30
+    df["is_premarket"] = total_min < 570
+    # Slot index within regular session (0=09:30, 25=15:45)
+    df["slot"] = np.where(df["is_regular"], (total_min - 570) // 15, -1)
+
+    trading_dates = sorted(df["trading_date"].unique())
+    daily_rows: list[dict] = []
+    prev_close: float = float("nan")
+
+    for td in trading_dates:
+        day_df = df[df["trading_date"] == td]
+        reg = day_df[day_df["is_regular"]].sort_values("ts")
+        pm = day_df[day_df["is_premarket"]].sort_values("ts")
+
+        # Skip days with no regular session data
+        if len(reg) == 0:
+            continue
+
+        # --- Regular session aggregates ---
+        day_open = float(reg["open"].iloc[0])
+        day_close = float(reg["close"].iloc[-1])
+        day_volume = float(reg["volume"].sum())
+        day_trades = float(reg["trade_count"].sum())
+        day_high = float(reg["high"].max())
+        day_low = float(reg["low"].min())
+
+        closes = reg["close"].values.astype(float)
+        prev_closes = np.concatenate([[day_open], closes[:-1]])
+        log_rets = np.log(np.where(prev_closes > 0, closes / prev_closes, 1.0))
+        day_realized_vol = float(log_rets.std() * np.sqrt(26)) if len(log_rets) > 1 else 0.0
+
+        full_day_return = (day_close - day_open) / day_open if day_open > 0 else 0.0
+        day_range = (day_high - day_low) / day_open if day_open > 0 else 0.0
+
+        vwap_num = float((reg["vwap"] * reg["volume"]).sum())
+        day_vwap = vwap_num / day_volume if day_volume > 0 else day_open
+        day_vwap_delta = (day_vwap - day_open) / day_open if day_open > 0 else 0.0
+
+        overnight_gap = (day_open - prev_close) / prev_close if np.isfinite(prev_close) and prev_close > 0 else 0.0
+
+        # --- Premarket aggregates ---
+        if len(pm) > 0:
+            has_premarket = 1.0
+            pm_open = float(pm["open"].iloc[0])
+            pm_close = float(pm["close"].iloc[-1])
+            pm_volume = float(pm["volume"].sum())
+            pm_trades = float(pm["trade_count"].sum())
+            pm_high = float(pm["high"].max())
+            pm_low = float(pm["low"].min())
+
+            pm_closes = pm["close"].values.astype(float)
+            pm_prev = np.concatenate([[pm_open], pm_closes[:-1]])
+            pm_log_rets = np.log(np.where(pm_prev > 0, pm_closes / pm_prev, 1.0))
+            premarket_realized_vol = float(pm_log_rets.std()) if len(pm_log_rets) > 1 else 0.0
+
+            premarket_return = (pm_close - pm_open) / pm_open if pm_open > 0 else 0.0
+            premarket_range = (pm_high - pm_low) / pm_open if pm_open > 0 else 0.0
+            premarket_gap = (pm_open - prev_close) / prev_close if np.isfinite(prev_close) and prev_close > 0 else 0.0
+            premarket_close_to_prev = (pm_close - prev_close) / prev_close if np.isfinite(prev_close) and prev_close > 0 else 0.0
+
+            pm_vwap_num = float((pm["vwap"] * pm["volume"]).sum())
+            pm_vwap = pm_vwap_num / pm_volume if pm_volume > 0 else pm_open
+            premarket_vwap_delta = (pm_vwap - prev_close) / prev_close if np.isfinite(prev_close) and prev_close > 0 else 0.0
+        else:
+            has_premarket = pm_volume = pm_trades = 0.0
+            premarket_realized_vol = premarket_return = premarket_range = 0.0
+            premarket_gap = premarket_close_to_prev = premarket_vwap_delta = 0.0
+
+        # --- Per-slot features ---
+        slot_feats: dict = {}
+        for s in range(26):
+            pfx = f"slot_{s:02d}"
+            sb = reg[reg["slot"] == s]
+            if len(sb) > 0:
+                bar = sb.iloc[0]
+                bc = float(bar["close"])
+                bh = float(bar["high"])
+                bl = float(bar["low"])
+                bv = float(bar["volume"])
+                if s == 0:
+                    pbc = day_open
+                else:
+                    prev_sb = reg[reg["slot"] == s - 1]
+                    pbc = float(prev_sb["close"].iloc[-1]) if len(prev_sb) > 0 else day_open
+                bar_ret = float(np.log(bc / pbc)) if pbc > 0 else 0.0
+                path_from_open = (bc - day_open) / day_open if day_open > 0 else 0.0
+                path_to_close = (day_close - bc) / day_open if day_open > 0 else 0.0
+                slot_range = (bh - bl) / day_open if day_open > 0 else 0.0
+                vol_share = bv / day_volume if day_volume > 0 else 0.0
+            else:
+                bar_ret = path_from_open = path_to_close = slot_range = vol_share = 0.0
+
+            slot_feats[f"{pfx}_slot_bar_return"] = bar_ret
+            slot_feats[f"{pfx}_slot_path_from_open"] = path_from_open
+            slot_feats[f"{pfx}_slot_path_to_close"] = path_to_close
+            slot_feats[f"{pfx}_slot_range"] = slot_range
+            slot_feats[f"{pfx}_slot_volume_share"] = vol_share
+
+        prev_close = day_close
+
+        daily_rows.append({
+            "trading_date": td,
+            "day_volume": day_volume,
+            "day_trades": day_trades,
+            "day_realized_vol": day_realized_vol,
+            "full_day_return": full_day_return,
+            "day_range": day_range,
+            "overnight_gap": overnight_gap,
+            "day_vwap_delta": day_vwap_delta,
+            "premarket_volume": pm_volume,
+            "premarket_trades": pm_trades,
+            "premarket_realized_vol": premarket_realized_vol,
+            "premarket_return": premarket_return,
+            "premarket_range": premarket_range,
+            "premarket_gap": premarket_gap,
+            "premarket_close_to_prev_close": premarket_close_to_prev,
+            "premarket_vwap_delta": premarket_vwap_delta,
+            "has_premarket": has_premarket,
+            **slot_feats,
+        })
+
+    daily_df = pd.DataFrame(daily_rows).set_index("trading_date")
+
+    # --- Rolling windows ---
+    daily_cols = [
+        "full_day_return", "day_range", "day_volume", "day_realized_vol",
+        "overnight_gap", "premarket_return", "premarket_volume",
+    ]
+    for window, suffix in [(5, "5d"), (10, "10d"), (20, "20d"), (60, "60d")]:
+        for col in daily_cols:
+            daily_df[f"{col}_mean_{suffix}"] = daily_df[col].rolling(window, min_periods=1).mean()
+            daily_df[f"{col}_std_{suffix}"] = daily_df[col].rolling(window, min_periods=1).std().fillna(0.0)
+
+    for window, suffix in [(5, "5d"), (10, "10d"), (20, "20d")]:
+        for s in range(26):
+            pfx = f"slot_{s:02d}"
+            for metric in ["slot_path_from_open", "slot_volume_share"]:
+                col = f"{pfx}_{metric}"
+                daily_df[f"{col}_mean_{suffix}"] = daily_df[col].rolling(window, min_periods=1).mean()
+                daily_df[f"{col}_std_{suffix}"] = daily_df[col].rolling(window, min_periods=1).std().fillna(0.0)
+
+    return daily_df
+
+
 def prepare_features_for_next_day(
     df: pd.DataFrame,
     feature_names: list[str],
 ) -> pd.DataFrame:
     """
-    Validate and order a pre-built feature DataFrame for NextDayPathBundle.
-
-    The caller is responsible for building `df` with all 514 aggregated features
-    (daily stats, premarket data, intraday 15-min slot statistics).  This function
-    only validates column presence, selects + orders them, and casts to float32.
+    Build all 514 next-day model features from raw 15-min bar data.
 
     Args:
-        df: DataFrame with at least one row and all 514 required columns.
-        feature_names: Ordered list of feature names from feature_names.json.
+        df: Raw 15-min bars with columns: date, open, high, low, close, volume,
+            trade_count, vwap.  Must span at least 65 trading days for accurate
+            60d rolling features.
+        feature_names: Ordered list of 514 feature names from feature_names.json.
 
     Returns:
-        Single-row DataFrame shaped (1, 514) ready for xgboost.DMatrix.
+        Single-row DataFrame (1, 514) ready for xgboost.DMatrix, float32.
 
     Raises:
-        KeyError: If any required column is missing from df.
+        KeyError: If a required feature cannot be computed from the input data.
     """
-    missing = [col for col in feature_names if col not in df.columns]
+    daily_df = _build_daily_features(df)
+
+    if len(daily_df) == 0:
+        raise ValueError("No complete trading days found in the provided bar data.")
+
+    last_row = daily_df.iloc[[-1]].reset_index(drop=True)
+
+    missing = [f for f in feature_names if f not in last_row.columns]
     if missing:
         raise KeyError(
-            f"Missing {len(missing)} required features for next-day model: {missing[:10]}{'…' if len(missing) > 10 else ''}"
+            f"Missing {len(missing)} required features for next-day model: "
+            f"{missing[:10]}{'…' if len(missing) > 10 else ''}"
         )
-    return df[feature_names].iloc[[-1]].astype("float32")
+
+    return last_row[feature_names].fillna(0.0).astype("float32")

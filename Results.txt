@@ -1,0 +1,26 @@
+We trained an XGBoost multi-horizon next-day path model: 26 separate boosters, one for each 15-minute bar in the next regular trading session. The training data covered `2020-01-01` to `2026-03-03`, with `29` symbols, `9,393` rows in the best window, and `514` engineered features.
+
+Strategies tested in the completed run:
+- training windows: `18`, `24`, `48` months
+- XGBoost variants: `base`, `v1_baseline`, `v2_mid`, `v3_deep`
+- `5` walk-forward folds with `5`-day test blocks
+- Optuna refinement on the top candidates
+=
+Best result:
+- window: `18 months`
+- variant: `v3_deep`
+- mean RMSE: `0.01956`
+- mean MAE: `0.01333`
+- final-horizon RMSE: `0.02085`
+- baseline mean RMSE: `0.02001`
+- RMSE uplift: `0.00046`
+- direction accuracy: `47.7%`
+
+Most important findings:
+- the model has some signal because RMSE improved over baseline
+- direction accuracy is weak, so it is not yet a reliable up/down model
+- `18m` clearly beat `24m` and `48m`, so more history was not better
+- performance was unstable across folds: earlier folds improved, later folds degraded
+- top features were dominated by volume and intraday volume-share structure, not broad price factors
+- the 26-bar path formulation was correct; the issue is model robustness, not the output design
+

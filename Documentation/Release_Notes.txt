@@ -1,0 +1,17 @@
+Release Notes - "the-project-maverick" (v1.0.0)
+Release Date: 2026-03-24
+
+Welcome to the official Version 1.0.0 release of the Stock Market Prediction System. This MVP directly aligns with all COSC 471 objectives emphasizing robust ML scaling integrated directly into React UI/UX visualizations.
+
+New Features & Additions:
+- Interactive Web Dashboard: Completely initialized utilizing Vite + React 19 encompassing Recharts mappings enabling rich zooming and historical stock analysis traversing cleanly structured tooltips.
+- Automated API Polling Framework: Embedded natively within the FastAPI backend architecture generating completely isolated parallel threads specifically dedicated towards fetching external data arrays cleanly mitigating request bottlenecks.
+- Asynchronous SQLAlchemy Scaling: PostgreSQL connections now utilize entirely async ORM interactions rendering latency metrics reliably below <100ms.
+- ModelManager Singleton Integration: Implemented safe-threading wrappers containing our complex XGBoost ML array eliminating memory bloats entirely during rapid multiple user interactions predicting chronological close arrays.
+- Deployment Pipelines: Shipped a completely structured `docker-compose` routing template bridging all networks locally with explicit environment parameterizing templates guaranteeing identical application deployments across different operating systems.
+
+Bug Fixes & Refinements:
+- Solved an issue mapping the CORS policy arrays restricting browser-to-server interactions previously yielding HTTP 500 status blockages.
+- Hardened database column lengths avoiding truncated strings explicitly when tracking irregular stock identifiers spanning over 6 characters natively.
+
+Thank you to the entire Stock Prediction Team for shipping this iteration!
