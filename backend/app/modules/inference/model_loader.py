@@ -5,6 +5,9 @@ Supports two bundle types:
   - LegacyXGBBundle (stock_prediction_xgb_global): single XGBRegressor → scalar return
   - NextDayPathBundle (nextday_15m_path_final): 26 native boosters → list of log-returns
 
+Additionally provides ReplayBundle for serving pre-computed predictions from a
+replay_intraday simulation run (ml/artifacts/replay_nextday/YYYY-MM-DD/).
+
 Switch bundles by setting ACTIVE_MODEL in .env.
 """
 
@@ -122,7 +125,85 @@ def create_model_bundle(path: Path) -> BaseModelBundle:
         raise ValueError(f"Unknown model bundle structure at {path}")
 
 
-# Module-level singleton — loaded once at import time.
+# ── Replay bundle ──────────────────────────────────────────────────────────────
+
+class ReplayBundle:
+    """
+    Serves pre-computed predictions from a replay_intraday simulation run.
+
+    Directory layout expected (produced by XG_boost_3.py --mode replay_intraday):
+        ml/artifacts/replay_nextday/YYYY-MM-DD/
+            paths/refresh/slot_00_path.csv   ← bar 0 (09:30)
+            paths/refresh/slot_01_path.csv
+            ...
+            paths/refresh/slot_25_path.csv   ← bar 25 (16:00)
+
+    Each CSV has columns: symbol, bar_idx, bar_time, pred_close, cutoff_close, ...
+    """
+
+    def __init__(self, replay_date_dir: Path) -> None:
+        self.replay_dir = replay_date_dir
+        paths_dir = replay_date_dir / "paths" / "refresh"
+        self.slot_csvs: list[Path] = sorted(paths_dir.glob("slot_*_path.csv"))
+        if not self.slot_csvs:
+            raise ValueError(f"No slot path CSVs found in {paths_dir}")
+        self.total_slots: int = len(self.slot_csvs)
+        self.current_slot: int = 0
+        logger.info(
+            "ReplayBundle loaded | date=%s | slots=%d",
+            replay_date_dir.name,
+            self.total_slots,
+        )
+
+    @property
+    def slot_name(self) -> str:
+        return self.slot_csvs[self.current_slot].stem.replace("_path", "")
+
+    def advance(self) -> dict[str, Any]:
+        """Step to the next bar. Returns current state after advancing."""
+        if self.current_slot < self.total_slots - 1:
+            self.current_slot += 1
+        return self.status()
+
+    def status(self) -> dict[str, Any]:
+        return {
+            "slot_index": self.current_slot,
+            "slot_name": self.slot_name,
+            "total_slots": self.total_slots,
+            "replay_date": self.replay_dir.name,
+            "at_end": self.current_slot == self.total_slots - 1,
+        }
+
+    def predict_for_symbol(self, symbol: str) -> pd.DataFrame:
+        """Return 26-row DataFrame (bar_idx, bar_time, pred_close, cutoff_close)."""
+        df = pd.read_csv(self.slot_csvs[self.current_slot])
+        rows = df[df["symbol"] == symbol.upper()].sort_values("bar_idx").reset_index(drop=True)
+        if rows.empty:
+            raise ValueError(f"Symbol {symbol} not found in replay slot {self.slot_name}")
+        return rows
+
+
+def _load_replay_bundle() -> "ReplayBundle | None":
+    """Load the most recent replay date dir, or None if none exists."""
+    replay_root = Path(__file__).resolve().parents[4] / "ml" / "artifacts" / "replay_nextday"
+    if not replay_root.exists():
+        return None
+    date_dirs = sorted(d for d in replay_root.iterdir() if d.is_dir())
+    if not date_dirs:
+        return None
+    try:
+        return ReplayBundle(date_dirs[-1])
+    except Exception as exc:
+        logger.warning("ReplayBundle could not be loaded: %s", exc)
+        return None
+
+
+# ── Module-level singletons ────────────────────────────────────────────────────
+
+# Production model — loaded once at import time.
 model_bundle: BaseModelBundle = create_model_bundle(
     Path(__file__).resolve().parents[4] / "model_artifacts" / settings.ACTIVE_MODEL
 )
+
+# Replay simulation bundle — None if no replay run exists yet.
+replay_bundle: ReplayBundle | None = _load_replay_bundle()

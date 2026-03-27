@@ -51,3 +51,14 @@ class NextDayPredictionResponse(BaseModel):
     predicted_direction: str            # "up" | "down"
     path: list[NextDayBarPrediction]    # 26 bars
     model_version: str
+
+
+class ReplayStatusResponse(BaseModel):
+    """Status of the replay simulation."""
+
+    slot_index: int         # 0–25
+    slot_name: str          # e.g. "slot_07"
+    total_slots: int        # always 26 for a full session
+    replay_date: str        # "2026-03-23"
+    at_end: bool            # True when all 26 bars have been stepped through
+    loaded: bool = True
