@@ -18,6 +18,7 @@ Endpoints:
 
 from fastapi import APIRouter, HTTPException
 
+from app.api.deps import SessionDep
 from app.modules.simulation.schemas import (
     SimBaseResponse,
     SimSessionInfo,
@@ -85,32 +86,82 @@ def get_step_prediction(symbol: str, step: int) -> SimStepResponse:
         raise HTTPException(status_code=500, detail=f"Simulation error: {e}")
 
 
-@router.get("/ohlc/{symbol}", response_model=list[dict])
-def get_simulation_ohlc(
-    symbol: str, session: SessionDep = None  # type: ignore[assignment]
-) -> list[dict]:
+@router.get("/history/{symbol}", response_model=list[dict])
+def get_simulation_history(symbol: str, session: SessionDep) -> list[dict]:
     """
-    Fetch real 15-min OHLC bars from PostgreSQL exactly for the simulation date (2026-03-23).
-    Used by the simulation UI to plot the real data alongside the predictions.
+    Return 15-min close prices for the 5 trading days leading up to and including
+    the simulation date (2026-03-17 → 2026-03-23), regular session only.
+    Used to show the week-in-context line chart.
     """
-    from datetime import date
-    from app.modules.market import crud
-    import calendar
+    from sqlalchemy import text
 
-    # The simulation replay date is fixed.
-    sim_date = date(2026, 3, 23)
-
-    # Re-use the market crud function that queries the DW
-    rows = crud.get_daily_prices(session, symbol.upper(), sim_date, sim_date)
+    rows = session.execute(
+        text(
+            """
+            SELECT
+                window_ts,
+                trade_date::text AS trade_date,
+                close::float
+            FROM ml.market_data_15m
+            WHERE symbol = :symbol
+              AND trade_date BETWEEN '2026-03-17' AND '2026-03-23'
+              AND window_ts AT TIME ZONE 'America/New_York' >= trade_date + TIME '09:30'
+              AND window_ts AT TIME ZONE 'America/New_York' <= trade_date + TIME '15:45'
+            ORDER BY window_ts ASC
+            """
+        ),
+        {"symbol": symbol.upper()},
+    ).fetchall()
 
     return [
         {
-            "time": int(calendar.timegm(r.date.timetuple())),
+            "time": int(r.window_ts.timestamp()),
+            "trade_date": r.trade_date,
+            "close": r.close,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/ohlc/{symbol}", response_model=list[dict])
+def get_simulation_ohlc(
+    symbol: str, session: SessionDep
+) -> list[dict]:
+    """
+    Fetch real 15-min OHLC bars from ml.market_data_15m for the simulation date (2026-03-23),
+    regular session only (09:30–15:45 ET = 13:30–19:45 UTC).
+    """
+    from sqlalchemy import text
+
+    rows = session.execute(
+        text(
+            """
+            SELECT
+                window_ts,
+                open::float,
+                high::float,
+                low::float,
+                close::float,
+                volume::bigint
+            FROM ml.market_data_15m
+            WHERE symbol = :symbol
+              AND trade_date = '2026-03-23'
+              AND window_ts AT TIME ZONE 'America/New_York' >= '2026-03-23 09:30:00'
+              AND window_ts AT TIME ZONE 'America/New_York' <= '2026-03-23 15:45:00'
+            ORDER BY window_ts ASC
+            """
+        ),
+        {"symbol": symbol.upper()},
+    ).fetchall()
+
+    return [
+        {
+            "time": int(r.window_ts.timestamp()),
             "open": r.open,
             "high": r.high,
             "low": r.low,
             "close": r.close,
-            "volume": int(round(float(r.volume))),
+            "volume": int(r.volume),
         }
         for r in rows
     ]

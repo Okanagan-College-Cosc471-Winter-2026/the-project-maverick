@@ -16,6 +16,7 @@ from api import (
     list_stocks,
     predict,
     sim_base,
+    sim_history,
     sim_ohlc,
     sim_session,
     sim_step,
@@ -58,6 +59,11 @@ def load_sim_base(symbol: str) -> dict:
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_sim_step(symbol: str, step: int) -> dict:
     return sim_step(symbol, step)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_sim_history(symbol: str) -> list[dict]:
+    return sim_history(symbol)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -489,180 +495,51 @@ def render_snapshots() -> None:
 # Simulation page helpers
 # ---------------------------------------------------------------------------
 
-_SIM_BAR_TIMES = [
-    f"{9 + (30 + i * 15) // 60:02d}:{(30 + i * 15) % 60:02d}" for i in range(26)
-]
-
-
-def _build_sim_chart(
-    real_df: pd.DataFrame | None,
-    pred: dict,
-    title: str,
-) -> go.Figure:
-    """Overlay real 15-min OHLC bars (from PSQL) with a prediction path."""
-    fig = go.Figure()
-    date_str = "2026-03-23"
-
-    # --- Real OHLC bars ---
-    if real_df is not None and not real_df.empty:
-        fig.add_trace(
-            go.Candlestick(
-                x=real_df["date"],
-                open=real_df["open"],
-                high=real_df["high"],
-                low=real_df["low"],
-                close=real_df["close"],
-                name="Real OHLC (PSQL)",
-                increasing_line_color="#0f766e",
-                decreasing_line_color="#b91c1c",
-                increasing_fillcolor="#14b8a6",
-                decreasing_fillcolor="#ef4444",
-            )
-        )
-
-    # --- Predicted path ---
-    bars = pred.get("bars", [])
-    if bars:
-        path_x = [f"{date_str} {b['bar_time']}:00" for b in bars]
-        path_y = [b["pred_log_return"] for b in bars]
-        # If pred_close available use it, else show log-returns on secondary axis
-        has_close = bars[0].get("pred_close") is not None
-        if has_close:
-            path_y = [b["pred_close"] for b in bars]
-            fig.add_trace(
-                go.Scatter(
-                    x=path_x,
-                    y=path_y,
-                    mode="lines+markers",
-                    name="Predicted Path",
-                    line={"color": "#f59e0b", "width": 2.5, "dash": "dot"},
-                    marker={"size": 5, "color": "#f59e0b"},
-                )
-            )
-        else:
-            # No anchor price — plot log-returns on a secondary axis
-            fig.add_trace(
-                go.Scatter(
-                    x=path_x,
-                    y=path_y,
-                    mode="lines+markers",
-                    name="Predicted Log-Return (h00→h25)",
-                    line={"color": "#a855f7", "width": 2, "dash": "dot"},
-                    marker={"size": 4, "color": "#a855f7"},
-                    yaxis="y3",
-                )
-            )
-
-    fig.update_layout(
-        title=title,
-        template="plotly_white",
-        paper_bgcolor="white",
-        plot_bgcolor="#fcfcfd",
-        xaxis_title=None,
-        yaxis_title="Price (USD)",
-        yaxis3={"title": "Log-Return", "overlaying": "y", "side": "right",
-                "showgrid": False, "tickformat": ".4f"},
-        legend={"orientation": "h", "y": 1.04, "x": 1, "xanchor": "right"},
-        margin={"l": 20, "r": 20, "t": 55, "b": 20},
-        height=500,
-        hovermode="x unified",
-        dragmode="pan",
-        xaxis=dict(
-            showgrid=False,
-            rangeslider_visible=False,
-            rangebreaks=[
-                dict(bounds=["sat", "mon"]),
-                dict(bounds=[16, 9.5], pattern="hour"),
-            ],
-        ),
-    )
-    return fig
-
-
 def render_simulation(stocks: list[dict]) -> None:
     st.subheader("Simulation — 2026-03-23 Replay")
-    st.caption(
-        "Left: real 15-min OHLC bars pulled from PostgreSQL.  "
-        "Right: model prediction path for the same day.  "
-        "Use the slider to step through warm-refresh model updates."
-    )
 
-    # --- Symbol selector ---
-    symbols = [s["symbol"] for s in stocks]
+    # --- Session metadata ---
     try:
-        session = load_sim_session()
-        step_labels: list[str] = session.get("step_labels", _SIM_BAR_TIMES)
-        step_count: int = session.get("steps_completed", 26)
-        base_trees: int = session.get("base_trees", 1157)
-        warm_per_step: int = session.get("warm_trees_per_step", 30)
+        session_info = load_sim_session()
+        step_labels: list[str] = session_info.get("step_labels", [])
+        step_count: int = session_info.get("steps_completed", 26)
+        base_trees: int = session_info.get("base_trees", 1157)
+        warm_per_step: int = session_info.get("warm_trees_per_step", 30)
     except ApiError as exc:
         st.error(f"Could not load session info: {exc}")
         return
 
-    st.markdown(
-        "This dashboard replays the model's intraday performance on **2026-03-23**. "
-        "It starts with the base model (trained through the previous Friday), and then simulates "
-        "the real-time *warm-refresh* pipeline updating the model every 15 minutes."
-    )
-
+    # --- Symbol selector ---
+    symbols = [s["symbol"] for s in stocks]
     symbol = st.selectbox(
-        "Select Asset to Simulate",
+        "Select Asset",
         symbols,
         index=symbols.index("AAPL") if "AAPL" in symbols else 0,
         key="sim_symbol",
     )
 
-    st.divider()
-
-    # ----------------------------------------------------------------
-    # 1. Real PSQL OHLC data for 2026-03-23
-    # ----------------------------------------------------------------
-    st.markdown(f"### 1. Market Reality — {symbol} on 2026-03-23")
-    st.caption("Real 15-minute price action pulled directly from the PostgreSQL warehouse.")
+    # --- Load 5-day history (Mar 17–23) from DB ---
     try:
-        raw = load_sim_ohlc(symbol)
-        day_df = pd.DataFrame(raw)
-        if not day_df.empty:
-            day_df["date"] = pd.to_datetime(day_df["time"], unit="s", utc=True)
-            day_df = day_df.sort_values("date").reset_index(drop=True)
+        hist_raw = load_sim_history(symbol)
+        hist_df = pd.DataFrame(hist_raw)
+        hist_df["date"] = pd.to_datetime(hist_df["time"], unit="s", utc=True)
+        hist_df = hist_df.sort_values("date").reset_index(drop=True)
     except ApiError as exc:
-        st.warning(f"Could not load OHLC data: {exc}")
-        day_df = pd.DataFrame()
+        st.error(f"Could not load history: {exc}")
+        return
 
-    if day_df.empty:
-        st.info("No 15-min bars found in the database. Charts will show predictions only.")
-        day_df = None
-    else:
-        latest_close = float(day_df["close"].iloc[-1])
-        open_price = float(day_df["open"].iloc[0])
-        day_return = (latest_close / open_price - 1) * 100
-        r1, r2, r3 = st.columns(3)
-        r1.metric("Open", f"${open_price:.2f}")
-        r2.metric("Last Close", f"${latest_close:.2f}")
-        r3.metric("Actual Day Return", f"{day_return:+.2f}%")
+    # Anchor = last close of Mar 20 (end of base model training window)
+    mar20 = hist_df[hist_df["trade_date"] == "2026-03-20"]
+    anchor_close: float = float(mar20["close"].iloc[-1]) if not mar20.empty else None
 
-        # Just show a chart of the real data
-        fig_real = go.Figure()
-        fig_real.add_trace(go.Candlestick(
-            x=day_df["date"], open=day_df["open"], high=day_df["high"],
-            low=day_df["low"], close=day_df["close"], name="Real OHLC"
-        ))
-        fig_real.update_layout(
-            template="plotly_white", height=350, margin={"l": 20, "r": 20, "t": 20, "b": 20},
-            xaxis=dict(rangeslider_visible=False)
-        )
-        st.plotly_chart(fig_real, use_container_width=True)
+    # Mar 23 actual close for metrics
+    mar23 = hist_df[hist_df["trade_date"] == "2026-03-23"]
+    if not mar23.empty:
+        actual_open = float(mar23["close"].iloc[0])
+        actual_close = float(mar23["close"].iloc[-1])
+        actual_ret = (actual_close / actual_open - 1) * 100
 
-    st.divider()
-
-    # ----------------------------------------------------------------
-    # 2. Base Model Prediction
-    # ----------------------------------------------------------------
-    st.markdown("### 2. Base Model Prediction (09:30)")
-    st.caption(
-        f"The prediction heading into the day. "
-        f"Trained through **2026-03-20** · {base_trees:,} trees · No warm-refresh."
-    )
+    # --- Load base model prediction ---
     try:
         with st.spinner("Loading base predictions..."):
             pred_base = load_sim_base(symbol)
@@ -672,95 +549,187 @@ def render_simulation(stocks: list[dict]) -> None:
 
     full_ret_base = pred_base.get("predicted_full_day_return", 0.0)
     dir_base = pred_base.get("predicted_direction", "—")
-    b1, b2, b3 = st.columns(3)
-    b1.metric("Model Snapshot", "Base (2026-03-20)")
-    b2.metric("Predicted Return", f"{full_ret_base:+.4f}%")
-    b3.metric("Direction", dir_base.upper(), delta=dir_base)
 
-    fig_base = _build_sim_chart(day_df, pred_base, f"{symbol} — Base Model Pred vs Real")
-    st.plotly_chart(fig_base, use_container_width=True)
+    # --- Mode toggle ---
+    mode = st.radio(
+        "Prediction view",
+        ["Base Model (Mar 20 → Mar 23)", "Warm-Refresh Simulation"],
+        horizontal=True,
+        key="sim_mode",
+    )
 
-    st.divider()
+    pred_active = pred_base
+    step_label: str | None = None
+    total_trees = base_trees
+    current_step: int = -1  # -1 = base mode
+
+    if mode == "Warm-Refresh Simulation":
+        # Read slider value first (before loading data) so we know what to fetch
+        current_step = st.session_state.get("sim_step_slider", 0)
+        step_label = step_labels[current_step] if current_step < len(step_labels) else str(current_step)
+        total_trees = base_trees + (current_step + 1) * warm_per_step
+        try:
+            with st.spinner(f"Step {step_label}..."):
+                pred_active = load_sim_step(symbol, current_step)
+        except ApiError as exc:
+            st.error(f"Step prediction failed: {exc}")
+            return
+
+    # --- Metrics row ---
+    full_ret = pred_active.get("predicted_full_day_return", 0.0)
+    direction = pred_active.get("predicted_direction", "—")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Base Model Trained", "2026-03-20")
+    c2.metric("Prediction Target", "2026-03-23")
+    c3.metric("Predicted Return", f"{full_ret:+.4f}%")
+    c4.metric("Direction", direction.upper())
+    if not mar23.empty:
+        st.caption(f"Actual Mar 23 return: **{actual_ret:+.2f}%** | Predicted: **{full_ret:+.4f}%**")
 
     # ----------------------------------------------------------------
-    # 3. Warm-Refresh Step-Through
+    # The chart: 5-day close line (Mar 17-23) + prediction path on Mar 23
+    # Slider sits right above the chart so it doesn't cause page scroll
     # ----------------------------------------------------------------
-    st.markdown("### 3. Intraday Warm-Refresh Simulation")
-    st.caption(
-        "Simulate the model evolving throughout the day. "
-        "Each 15-minute step trains 30 new trees on the intraday data observed *up to that point*, "
-        "and immediately predicts the path for the rest of the day."
-    )
-
-    step = st.slider(
-        "Intraday Time (15-min bar)",
-        min_value=0,
-        max_value=step_count - 1,
-        value=0,
-        format="%d",
-        key="sim_step_slider",
-    )
-    label = step_labels[step] if step < len(step_labels) else str(step)
-    total_trees = base_trees + (step + 1) * warm_per_step
-
-    st.progress((step + 1) / step_count, text=f"Bar {step + 1}/{step_count}  ·  {label}")
-    st.caption(
-        f"**As-of: {label}**  ·  "
-        f"{base_trees:,} base + {(step+1)*warm_per_step:,} warm = **{total_trees:,} trees**"
-    )
-
-    try:
-        with st.spinner(f"Loading step {step} predictions..."):
-            pred_step = load_sim_step(symbol, step)
-    except ApiError as exc:
-        st.error(f"Step prediction failed: {exc}")
-        return
-
-    full_ret_step = pred_step.get("predicted_full_day_return", 0.0)
-    dir_step = pred_step.get("predicted_direction", "—")
-    delta_ret = full_ret_step - full_ret_base
-
-    w1, w2, w3, w4 = st.columns(4)
-    w1.metric("As-of Time", label)
-    w2.metric("Total Trees", f"{total_trees:,}")
-    w3.metric("Predicted Return", f"{full_ret_step:+.4f}%", delta=f"{delta_ret:+.4f}% vs Base")
-    w4.metric("Direction", dir_step.upper(), delta=dir_step)
-
-    fig_step = _build_sim_chart(day_df, pred_step, f"{symbol} — Warm-Refresh @ {label} ({total_trees:,} trees)")
-    st.plotly_chart(fig_step, use_container_width=True)
-
-    with st.expander("Show raw prediction tables", expanded=False):
-        t1, t2 = st.columns(2)
-        with t1:
-            st.markdown("**Base Logs**")
-            st.dataframe(pd.DataFrame(pred_base.get("bars", [])), hide_index=True)
-        with t2:
-            st.markdown(f"**Step {label} Logs**")
-            st.dataframe(pd.DataFrame(pred_step.get("bars", [])), hide_index=True)
-
-            fig = _build_sim_chart(
-                day_df,
-                pred,
-                f"{symbol} — Warm-Refresh @ {label} ({total_trees:,} trees)",
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-            # Compare base vs current step return
+    if mode == "Warm-Refresh Simulation":
+        current_step = st.slider(
+            "Intraday bar — drag to step through warm-refresh updates",
+            min_value=0,
+            max_value=step_count - 1,
+            value=current_step,
+            format="%d",
+            key="sim_step_slider",
+        )
+        # Reload if slider moved
+        if current_step != st.session_state.get("_last_step"):
+            st.session_state["_last_step"] = current_step
+            step_label = step_labels[current_step] if current_step < len(step_labels) else str(current_step)
+            total_trees = base_trees + (current_step + 1) * warm_per_step
             try:
-                base_pred = load_sim_base(symbol)
-                base_ret = base_pred.get("predicted_full_day_return", 0.0)
-                delta_ret = full_ret - base_ret
-                st.caption(
-                    f"Δ vs base model: **{delta_ret:+.4f}%** "
-                    f"(base: {base_ret:+.4f}% → step {step}: {full_ret:+.4f}%)"
-                )
-            except ApiError:
-                pass
+                pred_active = load_sim_step(symbol, current_step)
+            except ApiError as exc:
+                st.error(f"Step prediction failed: {exc}")
+                return
 
-            with st.expander("Raw prediction bars", expanded=False):
-                bars_df = pd.DataFrame(pred.get("bars", []))
-                if not bars_df.empty:
-                    st.dataframe(bars_df, use_container_width=True, hide_index=True)
+    fig = go.Figure()
+
+    # Split history into pre-Mar23 and Mar23 actual
+    pre23 = hist_df[hist_df["trade_date"] < "2026-03-23"]
+    on23 = hist_df[hist_df["trade_date"] == "2026-03-23"]
+
+    # Historical line (Mar 17-20)
+    fig.add_trace(go.Scatter(
+        x=pre23["date"], y=pre23["close"],
+        mode="lines",
+        name="Historical Close (DB)",
+        line={"color": "#64748b", "width": 2},
+    ))
+
+    # Mar 23 actual line
+    if not on23.empty:
+        # Connect last Mar-20 bar to first Mar-23 bar
+        connect_x = [pre23["date"].iloc[-1], on23["date"].iloc[0]]
+        connect_y = [pre23["close"].iloc[-1], on23["close"].iloc[0]]
+        fig.add_trace(go.Scatter(
+            x=connect_x, y=connect_y,
+            mode="lines", showlegend=False,
+            line={"color": "#0ea5e9", "width": 2},
+        ))
+
+        if current_step >= 0:
+            # Warm-refresh: show observed bars 0→step as a distinct "Observed" trace
+            observed = on23.iloc[: current_step + 1]
+            fig.add_trace(go.Scatter(
+                x=observed["date"], y=observed["close"],
+                mode="lines",
+                name=f"Mar 23 Observed (0→{step_label})",
+                line={"color": "#0ea5e9", "width": 2},
+            ))
+            # Show remaining actual bars as a clearly visible but distinct "future reality" line
+            remaining_actual = on23.iloc[current_step:]
+            if len(remaining_actual) > 1:
+                fig.add_trace(go.Scatter(
+                    x=remaining_actual["date"], y=remaining_actual["close"],
+                    mode="lines",
+                    name="Mar 23 Actual — not yet seen by model",
+                    line={"color": "#38bdf8", "width": 2, "dash": "dashdot"},
+                    opacity=0.6,
+                ))
+        else:
+            fig.add_trace(go.Scatter(
+                x=on23["date"], y=on23["close"],
+                mode="lines",
+                name="Mar 23 Actual (DB)",
+                line={"color": "#0ea5e9", "width": 2},
+            ))
+
+    import math
+
+    bars = pred_active.get("bars", [])
+    if bars and not on23.empty:
+        if current_step >= 0:
+            # Warm-refresh: anchor prediction to actual close at current step
+            # Only show forward bars (step+1 → 25) so the line starts where reality is
+            actual_close_at_step = float(on23["close"].iloc[current_step])
+            base_log_ret = bars[current_step]["pred_log_return"]
+
+            fwd_start = current_step  # include current bar as the anchor point
+            fwd_bars = bars[fwd_start:]
+            fwd_xs = [on23["date"].iloc[fwd_start + i] for i in range(len(fwd_bars)) if fwd_start + i < len(on23)]
+            fwd_ys = [
+                round(actual_close_at_step * math.exp(b["pred_log_return"] - base_log_ret), 4)
+                for b in fwd_bars[: len(fwd_xs)]
+            ]
+            fig.add_trace(go.Scatter(
+                x=fwd_xs, y=fwd_ys,
+                mode="lines+markers",
+                name=f"Warm-Refresh Prediction @ {step_label} ({total_trees:,} trees)",
+                line={"color": "#f59e0b", "width": 2.5, "dash": "dot"},
+                marker={"size": 4, "color": "#f59e0b"},
+            ))
+        elif anchor_close:
+            # Base mode: full 26-bar prediction anchored to Mar 20 close
+            pred_xs = [on23["date"].iloc[i] for i in range(len(bars)) if i < len(on23)]
+            pred_ys = [round(anchor_close * math.exp(b["pred_log_return"]), 4) for b in bars[: len(pred_xs)]]
+            fig.add_trace(go.Scatter(
+                x=pred_xs, y=pred_ys,
+                mode="lines+markers",
+                name=f"Base Model Prediction ({base_trees:,} trees)",
+                line={"color": "#f59e0b", "width": 2.5, "dash": "dot"},
+                marker={"size": 4, "color": "#f59e0b"},
+            ))
+
+    # Vertical line marking start of Mar 23
+    if not on23.empty:
+        vline_x = on23["date"].iloc[0].strftime("%Y-%m-%d %H:%M:%S")
+        fig.add_shape(
+            type="line",
+            x0=vline_x, x1=vline_x,
+            y0=0, y1=1,
+            xref="x", yref="paper",
+            line={"dash": "dash", "color": "#94a3b8", "width": 1},
+        )
+
+    fig.update_layout(
+        template="plotly_white",
+        paper_bgcolor="white",
+        plot_bgcolor="#fcfcfd",
+        yaxis_title="Price (USD)",
+        xaxis_title=None,
+        height=520,
+        hovermode="x unified",
+        dragmode="pan",
+        legend={"orientation": "h", "y": 1.04, "x": 1, "xanchor": "right"},
+        margin={"l": 20, "r": 20, "t": 40, "b": 20},
+        xaxis=dict(
+            showgrid=False,
+            rangeslider_visible=False,
+            rangebreaks=[
+                dict(bounds=["sat", "mon"]),
+                dict(bounds=[20, 13.5], pattern="hour"),  # UTC: 20:00=16:00ET close, 13:30=09:30ET open
+            ],
+        ),
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def main() -> None:

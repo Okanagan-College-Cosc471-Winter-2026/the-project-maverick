@@ -91,6 +91,11 @@ def sim_step(symbol: str, step: int) -> dict[str, Any]:
     return _request("GET", f"/simulation/step/{symbol.upper()}/{step}")
 
 
+def sim_history(symbol: str) -> list[dict[str, Any]]:
+    """Fetch 15-min close prices for Mar 17–23 (5 trading days) for the context line chart."""
+    return _request("GET", f"/simulation/history/{symbol.upper()}")
+
+
 def sim_ohlc(symbol: str) -> list[dict[str, Any]]:
     """Fetch real 15-min OHLC bars specifically for the 2026-03-23 simulation day."""
     return _request("GET", f"/simulation/ohlc/{symbol.upper()}")
