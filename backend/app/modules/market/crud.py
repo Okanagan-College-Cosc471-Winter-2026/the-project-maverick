@@ -9,19 +9,16 @@ from sqlalchemy.orm import Session
 
 STOCK_METADATA_QUERY = text(
     """
-    SELECT DISTINCT
+    SELECT
         i.symbol AS symbol,
         COALESCE(c.company_name, i.name, i.symbol) AS name,
         c.sector AS sector,
         c.industry AS industry,
-        e.exchange_code AS exchange
-    FROM dw.fact_15min_stock_price f
-    JOIN dw.dim_instrument i
-      ON f.fk_instrument_id = i.sk_instrument_id
+        NULL AS exchange
+    FROM dw.dim_instrument i
     LEFT JOIN dw.dim_company c
-      ON f.fk_company_id = c.sk_company_id
-    LEFT JOIN dw.dim_exchange e
-      ON f.fk_exchange_id = e.sk_exchange_id
+      ON c.symbol = i.symbol
+    WHERE i.instrument_type = 'stock'
     """
 )
 
@@ -41,7 +38,7 @@ def get_active_stocks(session: Session) -> list[StockRecord]:
         text(
             f"""
             {STOCK_METADATA_QUERY.text}
-            WHERE COALESCE(c.is_active, TRUE) IS TRUE
+            AND COALESCE(c.is_active, TRUE) IS TRUE
             ORDER BY i.symbol
             """
         )
@@ -64,7 +61,7 @@ def get_stock(session: Session, symbol: str) -> StockRecord | None:
         text(
             f"""
             {STOCK_METADATA_QUERY.text}
-            WHERE i.symbol = :symbol
+            AND i.symbol = :symbol
             ORDER BY i.symbol
             LIMIT 1
             """
