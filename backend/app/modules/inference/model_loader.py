@@ -8,6 +8,7 @@ Supports two bundle types:
 Switch bundles by setting ACTIVE_MODEL in .env.
 """
 
+from functools import lru_cache
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -122,7 +123,15 @@ def create_model_bundle(path: Path) -> BaseModelBundle:
         raise ValueError(f"Unknown model bundle structure at {path}")
 
 
-# Module-level singleton — loaded once at import time.
-model_bundle: BaseModelBundle = create_model_bundle(
-    Path(__file__).resolve().parents[4] / "model_artifacts" / settings.ACTIVE_MODEL
-)
+@lru_cache(maxsize=1)
+def get_model_bundle() -> BaseModelBundle:
+    """
+    Lazily load the active model bundle.
+
+    This keeps application imports safe in environments like CI where model
+    artifacts may be absent, while preserving a singleton-style cache once the
+    bundle is first requested by an inference path.
+    """
+    bundle_path = Path(__file__).resolve().parents[4] / "model_artifacts" / settings.ACTIVE_MODEL
+    logger.info("Loading active model bundle from %s", bundle_path)
+    return create_model_bundle(bundle_path)
