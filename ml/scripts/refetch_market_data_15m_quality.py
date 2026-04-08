@@ -75,11 +75,13 @@ RETRY_BACKOFF_SECONDS = (2, 5, 15)
 DEFAULT_CHUNK_DAYS = 5
 DEFAULT_SIMPLE_CHUNK_DAYS = 30
 MASSIVE_CHUNK_DAYS = 45
+MAX_ABS_PRICE = 999_999_999_999.0
 
 SP500_CACHE = ML_ROOT / "data" / ".sp500_tickers_cache.json"
 REPORT_DIR = ML_ROOT / "data" / "quality_refetch_reports"
 TREASURY_TABLE = "ml.macro_indicator_daily"
 SIMPLE_FMP_CHECKPOINT = REPORT_DIR / "simple_fmp_checkpoint.json"
+FILTERED_ROWS_REPORT = REPORT_DIR / "filtered_intraday_rows.ndjson"
 
 STOCK_INTRADAY_URLS = (
     "https://financialmodelingprep.com/stable/historical-chart/15min",
@@ -140,6 +142,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--chunk-days", type=int, default=DEFAULT_CHUNK_DAYS, help="Days per intraday API request.")
     parser.add_argument("--max-retries", type=int, default=3, help="Day-level refetch passes for unresolved gaps.")
     parser.add_argument("--limit-symbols", type=int, default=None, help="Only fetch the first N target symbols.")
+    parser.add_argument(
+        "--symbols",
+        default=None,
+        help="Comma-separated explicit symbol list. When set, overrides the default S&P 500 universe selection.",
+    )
+    parser.add_argument(
+        "--symbols-file",
+        default=None,
+        help="Path to a newline-delimited symbol list. Merged with --symbols when both are provided.",
+    )
     parser.add_argument(
         "--resume-from-checkpoint",
         action="store_true",
@@ -268,6 +280,7 @@ def fetch_intraday_chunk(
         & (frame["local_time"] < REGULAR_CLOSE)
         & frame["window_ts"].notna()
     ].copy()
+    frame = drop_out_of_range_ohlc_rows(symbol, frame)
     frame = frame.drop(columns=["date", "local_time"]).drop_duplicates(subset=["symbol", "window_ts"])
     return frame.sort_values("window_ts").reset_index(drop=True)
 
@@ -295,6 +308,7 @@ def normalize_intraday_frame(symbol: str, frame: pd.DataFrame, timestamp_col: st
         & (normalized["local_time"] < REGULAR_CLOSE)
         & normalized["window_ts"].notna()
     ].copy()
+    normalized = drop_out_of_range_ohlc_rows(symbol, normalized)
     normalized = normalized.drop(columns=[timestamp_col, "local_time"]).drop_duplicates(subset=["symbol", "window_ts"])
     return normalized.sort_values("window_ts").reset_index(drop=True)
 
@@ -389,6 +403,43 @@ def write_report(name: str, payload: Any) -> None:
     (REPORT_DIR / name).write_text(json.dumps(payload, indent=2, default=str))
 
 
+def append_filtered_rows_report(symbol: str, reason: str, rows: pd.DataFrame) -> None:
+    if rows.empty:
+        return
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    with FILTERED_ROWS_REPORT.open("a", encoding="utf-8") as handle:
+        for rec in rows.sort_values("window_ts").itertuples(index=False):
+            handle.write(
+                json.dumps(
+                    {
+                        "symbol": symbol,
+                        "reason": reason,
+                        "trade_date": rec.trade_date.isoformat() if rec.trade_date else None,
+                        "window_ts": rec.window_ts.isoformat() if rec.window_ts is not None else None,
+                        "open": None if pd.isna(rec.open) else float(rec.open),
+                        "high": None if pd.isna(rec.high) else float(rec.high),
+                        "low": None if pd.isna(rec.low) else float(rec.low),
+                        "close": None if pd.isna(rec.close) else float(rec.close),
+                        "volume": None if pd.isna(rec.volume) else int(rec.volume),
+                    },
+                    default=str,
+                )
+                + "\n"
+            )
+
+
+def drop_out_of_range_ohlc_rows(symbol: str, frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    overflow_mask = frame[["open", "high", "low", "close"]].abs().gt(MAX_ABS_PRICE).any(axis=1)
+    if not overflow_mask.any():
+        return frame
+    bad_rows = frame.loc[overflow_mask].copy()
+    append_filtered_rows_report(symbol, "ohlc_out_of_range", bad_rows)
+    print(f"  filtered_rows={len(bad_rows):,} reason=ohlc_out_of_range")
+    return frame.loc[~overflow_mask].copy()
+
+
 def serialize_missing_days(items: list[MissingDay]) -> list[dict[str, Any]]:
     return [
         {
@@ -423,6 +474,18 @@ def determine_effective_chunk_days(args: argparse.Namespace) -> int:
     if args.mode == "simple-fmp" and args.chunk_days == DEFAULT_CHUNK_DAYS:
         return DEFAULT_SIMPLE_CHUNK_DAYS
     return args.chunk_days
+
+
+def resolve_requested_symbols(args: argparse.Namespace) -> list[str]:
+    symbols: list[str] = []
+    if args.symbols:
+        symbols.extend(item.strip().upper() for item in args.symbols.split(",") if item.strip())
+    if args.symbols_file:
+        for line in Path(args.symbols_file).read_text().splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                symbols.append(stripped.upper())
+    return sorted(dict.fromkeys(symbols))
 
 
 def apply_simple_fmp_resume(
@@ -767,14 +830,20 @@ def main() -> None:
 
     session = build_session()
     all_sp500 = fetch_sp500_tickers(session)
-    symbols = list(all_sp500)
-    if args.limit_symbols is not None:
-        symbols = symbols[: max(0, args.limit_symbols)]
-    symbols.extend(COMMODITY_SYMBOLS.keys())
-    symbols = sorted(set(symbols))
+    symbols = resolve_requested_symbols(args)
+    explicit_symbols = bool(symbols)
+    if not explicit_symbols:
+        symbols = list(all_sp500)
+        if args.limit_symbols is not None:
+            symbols = symbols[: max(0, args.limit_symbols)]
+        symbols.extend(COMMODITY_SYMBOLS.keys())
+        symbols = sorted(set(symbols))
     symbols, resume_marker = apply_simple_fmp_resume(symbols, args, start_date, end_date)
 
-    print(f"Target symbols: {len(symbols)} ({len(all_sp500)} S&P 500 + {len(COMMODITY_SYMBOLS)} commodities)")
+    if explicit_symbols:
+        print(f"Target symbols: {len(symbols)} (explicit selection)")
+    else:
+        print(f"Target symbols: {len(symbols)} ({len(all_sp500)} S&P 500 + {len(COMMODITY_SYMBOLS)} commodities)")
     print(f"Date range: {start_date} -> {end_date}")
     print(f"Chunk days: {chunk_days}")
     if resume_marker:

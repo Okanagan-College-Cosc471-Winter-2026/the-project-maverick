@@ -5,9 +5,11 @@ Inference service for stock price predictions.
 import math
 from datetime import timedelta
 
+import pandas as pd
+
 from sqlalchemy.orm import Session
 
-from app.modules.inference.features import prepare_precomputed_features
+from app.modules.inference.features import prepare_production_features
 from app.modules.inference.model_loader import model_bundle
 from app.modules.inference.schemas import (
     NextDayBarPrediction,
@@ -89,13 +91,15 @@ class InferenceService:
         if stock is None:
             raise ValueError(f"Stock not found: {symbol}")
 
-        # 2. Load the latest engineered feature row matching the active bundle.
-        feature_row = crud.get_latest_inference_features(session, symbol, model_bundle.feature_names)
-        if feature_row is None:
+        # 2. Load recent warehouse bars and reconstruct the production feature row.
+        recent_bars = crud.get_recent_inference_bars(session, symbol)
+        if not recent_bars:
             raise ValueError(f"No engineered inference features available for {symbol}")
 
-        current_price = float(feature_row["close"])
-        features = prepare_precomputed_features(feature_row, model_bundle.feature_names)
+        bars_df = pd.DataFrame(recent_bars)
+        features = prepare_production_features(bars_df, model_bundle.feature_names)
+        latest_bar = bars_df.sort_values("window_ts").iloc[-1]
+        current_price = float(latest_bar["close"])
 
         # 3. Predict 26 log-returns
         log_returns: list[float] = model_bundle.predict(features)
@@ -115,7 +119,7 @@ class InferenceService:
         predicted_full_day_return = (final_price / current_price - 1) * 100
 
         # 6. Prediction date: next calendar day from the latest engineered bar.
-        prediction_date = feature_row["window_ts"] + timedelta(days=1)
+        prediction_date = pd.to_datetime(latest_bar["window_ts"]) + timedelta(days=1)
 
         model_version = model_bundle.metadata.get("model_version", "nextday_15m_path_final")
 
