@@ -164,6 +164,77 @@ def get_bars_for_features(session: Session, symbol: str, trading_days: int = 75)
     return list(results)
 
 
+def get_recent_inference_bars(
+    session: Session,
+    symbol: str,
+    trading_days: int = 75,
+) -> list[Any]:
+    """
+    Return recent engineered `ml.market_data_15m` rows for a symbol, oldest first.
+
+    These rows contain the base engineered columns needed to reconstruct the full
+    production inference feature vector expected by the active next-day model.
+    """
+    results = session.execute(
+        text(
+            """
+            SELECT * FROM (
+                SELECT
+                    symbol,
+                    trade_date,
+                    window_ts,
+                    open::float AS open,
+                    high::float AS high,
+                    low::float AS low,
+                    close::float AS close,
+                    volume::float AS volume,
+                    slot_count::float AS slot_count,
+                    lag_close_1::float AS lag_close_1,
+                    lag_close_5::float AS lag_close_5,
+                    lag_close_10::float AS lag_close_10,
+                    close_diff_1::float AS close_diff_1,
+                    close_diff_5::float AS close_diff_5,
+                    pct_change_1::float AS pct_change_1,
+                    pct_change_5::float AS pct_change_5,
+                    log_return_1::float AS log_return_1,
+                    sma_close_5::float AS sma_close_5,
+                    sma_close_10::float AS sma_close_10,
+                    sma_close_20::float AS sma_close_20,
+                    sma_volume_5::float AS sma_volume_5,
+                    day_of_week::float AS day_of_week,
+                    hour_of_day::float AS hour_of_day,
+                    day_monday::float AS day_monday,
+                    day_tuesday::float AS day_tuesday,
+                    day_wednesday::float AS day_wednesday,
+                    day_thursday::float AS day_thursday,
+                    day_friday::float AS day_friday,
+                    quarter_1::float AS quarter_1,
+                    quarter_2::float AS quarter_2,
+                    quarter_3::float AS quarter_3,
+                    quarter_4::float AS quarter_4,
+                    hour_early_morning::float AS hour_early_morning,
+                    hour_mid_morning::float AS hour_mid_morning,
+                    hour_afternoon::float AS hour_afternoon,
+                    hour_late_afternoon::float AS hour_late_afternoon,
+                    previous_close::float AS previous_close,
+                    overnight_gap_pct::float AS overnight_gap_pct,
+                    overnight_log_return::float AS overnight_log_return,
+                    is_gap_up::float AS is_gap_up,
+                    is_gap_down::float AS is_gap_down,
+                    month_of_year::float AS month_of_year
+                FROM ml.market_data_15m
+                WHERE symbol = :symbol
+                ORDER BY window_ts DESC
+                LIMIT :limit
+            ) sub
+            ORDER BY window_ts ASC
+            """
+        ),
+        {"symbol": symbol.upper(), "limit": trading_days * 26},
+    ).mappings().fetchall()
+    return list(results)
+
+
 def get_ohlc(session: Session, symbol: str, days: int = 365) -> list[Any]:
     """
     Return recent OHLC data for a symbol, oldest first.
