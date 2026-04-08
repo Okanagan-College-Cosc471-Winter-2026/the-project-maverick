@@ -1,56 +1,39 @@
-# User's Manual
+# User Manual
 
-## the-project-maverick: Stock Market Prediction Platform
+## What This System Is
 
-**Organization:** Okanagan College
-**Target Audience:** Retail Investors, Financial End-users
-**Course:** COSC 471
+The Project Maverick is a stock prediction platform with:
 
----
+- a Postgres data store
+- a FastAPI backend
+- a Streamlit dashboard
 
-### Welcome to "the-project-maverick"
-"The Project Maverick" provides institutional-grade Machine Learning predictions distilled into a simple, beautiful, and interactive dashboard interface.
+The dashboard lets you inspect market data, predictions, and simulation output.
 
-### 1. System Requirements & Access
-To leverage the dashboard, you will require:
-- A modern Web Browser (e.g., Google Chrome v100+, Firefox v90+, Safari v15+).
-- An active internet connection.
+## Access
 
-Simply navigate to the official domain string (e.g., `http://localhost:5173` or your hosted web address) provided by your system administrator.
+When running locally:
 
-### 2. Navigating the Interface
+- Streamlit dashboard: `http://localhost:8501`
+- Backend API docs: `http://localhost:8000/docs`
 
-Upon launching the application, you will be presented with the primary UI overlay:
+## Main Things You Can Do
 
-#### The Main Dashboard Canvas
-- **Stock Ticker Header:** Displays the currently selected tracking symbol (e.g., "**AAPL** - Apple Inc.") and the most recently polled stock price updating dynamically.
-- **Interactive Price Chart:** The massive centered graph is an interactive display representing both history and future estimations.
-    - **Solid Line:** Represents actual, historical closing prices on market days.
-    - **Dashed Line:** Emulates the XGBoost inference logic predicting tomorrow's (or the next chronological step) potential stock closing price.
-    - **Shaded Area Context:** Acts as the Model Confidence bound—meaning the algorithmic math states with X% certainty that the price will remain between the uppermost border and lowermost border of the shade.
+- browse supported stock symbols
+- view recent market history
+- overlay predictions on charts
+- inspect simulation and replay views
+- review training and snapshot-related outputs when exposed by the backend
 
-#### Changing Tracked Symbols
-On the top right quadrant of the screen, you will locate a drop-down labeled "Search Symbol".
-1. Click the text field.
-2. Type your requested ticker (e.g., type "TSLA").
-3. Select the valid company from the list dropdown.
-4. The backend API will be called, rapidly refreshing the chart to draw specific historical context mapped directly to the newly requested symbol.
+## What The Charts Show
 
-### 3. Understanding Context and Algorithms
-*Note that no financial application provides guaranteed results; this tool models historical patterns mapping against RSI/MACD indices, generating simulated momentum potentials.*
-- Hovering your cursor over *any node* along the main line chart reveals a precisely timed tooltip. This tooltip demonstrates exactly what value the stock held contextually per date.
-- Hovering over predictive nodes displays exactly what probability metric the XGBoost backend has allocated to this distinct jump direction.
+- historical market prices
+- model prediction paths
+- side-by-side actual vs predicted behavior
+- simulation playback based on saved model artifacts
 
-### 4. Technical Indicator Controls (Advanced Users)
-Beneath the core chart layout exists parameter toggles altering visual outputs:
-- **Checkbox: RSI View:** Turning this on injects a secondary visual trace mapping momentum vectors between bounds of 0-100 indicating computationally over-bought (>70) or over-sold (<30) territories.
-- **Checkbox: MACD View:** Truncates average distributions giving clearer volatility insights.
+## Troubleshooting
 
-### 5. Troubleshooting Common User Errors
-
-* **"Chart Data Loading..." Spinner fails to disappear:**
-  Your connection to the backend REST API may be severed. Ensure you are connected to the network, or contact administration indicating an HTTP 500 block.
-* **"Symbol Not Supported" Error:**
-  Our external data provider (FMP API) may not map all international exchanges. Ensure you are specifically requesting localized, recognized ticker symbols (e.g., matching standard NASDAQ outputs).
-* **Flatlining Predictive Lines:**
-  If the market is closed (e.g., Weekends/Holidays), the backend intentionally bypasses predictive inferences causing a 'flatline' effect. This is normal functionality representing paused time.
+- If the dashboard cannot load data, check that the backend is running on `http://localhost:8000`.
+- If backend calls fail, verify `API_BASE_URL` for Streamlit.
+- If charts are blank for a symbol, the backend may not have enough stored data for that symbol yet.
