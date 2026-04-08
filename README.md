@@ -11,7 +11,7 @@ Market prediction platform built around a Postgres feature store, a FastAPI back
 
 ## Demo
 
-[![Demo Walkthrough](https://cdn.loom.com/sessions/thumbnails/07f7584445dd41d389e720bd053ae7ea-with-play.gif)](https://www.loom.com/share/07f7584445dd41d389e720bd053ae7ea)
+- Demo walkthrough: `https://www.loom.com/share/07f7584445dd41d389e720bd053ae7ea`
 
 ## What Lives Where
 
