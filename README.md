@@ -4,15 +4,15 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![MarketSight](https://img.shields.io/badge/MarketSight-0.104+-green.svg)](https://MarketSight.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6.svg)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A production-ready system that leverages XGBoost machine learning to provide real-time stock price predictions with live dashboard visualization. The system continuously monitors market data, calculates technical indicators, and generates predictions with confidence scores.
 
-## Streamlit Frontend Migration
+## Streamlit Frontend
 
-An in-progress Streamlit replacement frontend now lives in `frontend_streamlit/`. It is designed to run directly from a local Python virtual environment instead of Docker:
+The active frontend lives in `frontend_streamlit/`. The old React frontend is no longer part of the Docker stack.
+
+For local development without Docker:
 
 ```bash
 python -m venv .venv
@@ -24,17 +24,17 @@ API_BASE_URL=http://localhost:8000/api/v1 streamlit run frontend_streamlit/app.p
 ## 🌟 Key Features
 - **Real-Time Predictions**: Automated polling (configurable interval) with sub-second inference.
 - **Advanced Machine Learning**: XGBoost model trained on historical data with technical indicators (RSI, MACD, Bollinger Bands).
-- **Interactive Dashboard**: Modern React UI with Recharts, measuring forecast accuracy in real-time.
+- **Interactive Dashboard**: Streamlit UI for predictions, charting, and simulation review.
 - **Robust Backend**: FastAPI application with SQLAlchemy v2, Alembic migrations, and Pydantic v2 validation.
 - **Enterprise-Grade Testing**: Comprehensive `pytest` suite covering API, CRUD, and ML inference with dedicated CI pipelines.
-- **Developer Experience**: Fully dockerized stack, `uv` for minimal-latency dependency management, and type-safety throughout (Mypy/TypeScript).
+- **Developer Experience**: Dockerized backend/data services, Streamlit frontend, and `uv`-based Python workflows.
 
 ## 🏗️ System Architecture
 
 ### High-Level Components
 ![System Architecture](Documentation/image.png)
 
-- **Frontend**: React 19 + TypeScript + Vite. Features a dynamic StockChart with confidence intervals.
+- **Frontend**: Streamlit dashboard for charts, prediction review, and simulation playback.
 - **Backend Service**: FastAPI. Handles REST API, WebSocket streaming (planned), and background data polling.
 - **ML Engine**: XGBoost Regressor wrapped in a thread-safe Singleton `ModelManager`.
 - **Database**: PostgreSQL (Application Data) + TimescaleDB ready (Market Data).
@@ -46,7 +46,7 @@ API_BASE_URL=http://localhost:8000/api/v1 streamlit run frontend_streamlit/app.p
 2. **Processing**: `pandas` pipeline calculates technical indicators from OHLCV data.
 3. **Inference**: XGBoost model predicts the next closing price.
 4. **Persistence**: Predictions and actuals are stored in Postgres for accuracy tracking.
-5. **Consumption**: Frontend fetches real-time data via optimized API endpoints.
+5. **Consumption**: Streamlit fetches data from the backend and renders charts and predictions.
 
 ### Use Cases
 ![Use Cases](Documentation/Screenshot_2026-01-27_at_7.50.52_PM.png)
@@ -63,13 +63,10 @@ API_BASE_URL=http://localhost:8000/api/v1 streamlit run frontend_streamlit/app.p
 - **Testing**: `pytest`, `httpx`
 
 ### Frontend
-- **Framework**: React 19
-- **Build Tool**: Vite
-- **Language**: TypeScript
-- **Styling**: TailwindCSS (via `cn` utility)
-- **Visualization**: Recharts
-- **State/Fetching**: TanStack Query (React Query)
-- **Linting**: Biome
+- **Framework**: Streamlit
+- **Language**: Python
+- **Visualization**: Plotly
+- **HTTP Client**: Requests
 
 
 ## 📁 Project Structure
@@ -95,24 +92,11 @@ stock-prediction-system/
 │   ├── requirements.txt       # Python dependencies
 │   └── Dockerfile
 │
-├── frontend/                   # React TypeScript frontend
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Dashboard.tsx  # Main dashboard component
-│   │   │   ├── PriceChart.tsx # Chart component
-│   │   │   └── SymbolSelector.tsx
-│   │   ├── hooks/
-│   │   │   ├── useWebSocket.ts # WebSocket hook
-│   │   │   └── usePredictions.ts # Data fetching hook
-│   │   ├── api/
-│   │   │   └── client.ts      # API client
-│   │   ├── types/
-│   │   │   └── prediction.ts  # TypeScript types
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   ├── public/
-│   ├── package.json
-│   └── Dockerfile
+├── frontend_streamlit/         # Active Streamlit frontend
+│   ├── app.py                  # Dashboard entry point
+│   ├── api.py                  # Backend API client
+│   ├── requirements.txt
+│   └── README.md
 │
 ├── docs/                       # Documentation
 │   ├── images/                # Architecture diagrams
@@ -168,9 +152,8 @@ API_HOST=0.0.0.0
 API_PORT=8000
 API_WORKERS=4
 
-# Frontend Configuration
-VITE_API_URL=http://localhost:8000
-VITE_WS_URL=ws://localhost:8000
+# Streamlit Configuration
+API_BASE_URL=http://localhost:8000/api/v1
 ```
 
 ## 📡 API Documentation

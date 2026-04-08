@@ -9,6 +9,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+EXPECTED_REGULAR_BARS = 26
+
 
 def calculate_technical_indicators(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
     """Build the full feature frame for one ticker."""
@@ -283,4 +285,137 @@ def prepare_features_for_next_day(
             f"{missing[:10]}{'…' if len(missing) > 10 else ''}"
         )
 
+    return last_row[feature_names].fillna(0.0).astype("float32")
+
+
+def safe_log_ratio(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
+    ratio = pd.to_numeric(numerator, errors="coerce").astype(float) / pd.to_numeric(
+        denominator, errors="coerce"
+    ).astype(float)
+    ratio = ratio.where(ratio > 0)
+    return np.log(ratio).replace([np.inf, -np.inf], np.nan)
+
+
+def add_group_rolling_features_by_keys(
+    df: pd.DataFrame,
+    group_cols: list[str],
+    value_cols: list[str],
+    windows: list[int],
+    suffix_template: str,
+) -> pd.DataFrame:
+    df = df.sort_values(group_cols + ["trade_date"]).copy()
+    grouped = df.groupby(group_cols, observed=True)
+    feature_map: dict[str, pd.Series] = {}
+    for window in windows:
+        for col in value_cols:
+            feature_map[suffix_template.format(col=col, window=window, stat="mean")] = grouped[col].transform(
+                lambda s: s.rolling(window, min_periods=2).mean()
+            )
+            feature_map[suffix_template.format(col=col, window=window, stat="std")] = grouped[col].transform(
+                lambda s: s.rolling(window, min_periods=2).std(ddof=0)
+            )
+    if not feature_map:
+        return df
+    return pd.concat([df, pd.DataFrame(feature_map, index=df.index)], axis=1).copy()
+
+
+def derive_market_features(bars: pd.DataFrame) -> pd.DataFrame:
+    """
+    Recreate the production inference features from engineered `ml.market_data_15m`
+    history, matching the training pipeline for the active 176-feature bundle.
+    """
+    out = bars.sort_values(["symbol", "window_ts"]).copy()
+    out["trade_date"] = pd.to_datetime(out["trade_date"]).dt.normalize()
+    out["slot_idx"] = out.groupby(["symbol", "trade_date"], observed=True).cumcount()
+    out["bar_time"] = out["window_ts"].dt.strftime("%H:%M")
+
+    day_group = out.groupby(["symbol", "trade_date"], observed=True)
+    day_open = day_group["open"].transform("first")
+
+    out["bars_seen"] = out["slot_idx"].astype(int) + 1
+    out["bars_remaining"] = EXPECTED_REGULAR_BARS - out["bars_seen"]
+    out["minutes_seen"] = out["bars_seen"].astype(float) * 15.0
+    out["intraday_progress"] = out["bars_seen"].astype(float) / float(EXPECTED_REGULAR_BARS)
+
+    out["cutoff_close"] = pd.to_numeric(out["close"], errors="coerce").astype(float)
+    out["cutoff_high_seen"] = day_group["high"].cummax().astype(float)
+    out["cutoff_low_seen"] = day_group["low"].cummin().astype(float)
+    out["cutoff_volume_seen"] = day_group["volume"].cumsum().astype(float)
+    out["cutoff_slot_idx"] = out["slot_idx"].astype(int)
+
+    out["close_open_log_return"] = safe_log_ratio(out["close"], out["open"])
+    out["high_low_log_range"] = safe_log_ratio(out["high"], out["low"])
+    out["close_vs_lag_close_1"] = safe_log_ratio(out["close"], out["lag_close_1"])
+    out["close_vs_lag_close_5"] = safe_log_ratio(out["close"], out["lag_close_5"])
+    out["close_vs_lag_close_10"] = safe_log_ratio(out["close"], out["lag_close_10"])
+    out["close_vs_sma_close_5"] = safe_log_ratio(out["close"], out["sma_close_5"])
+    out["close_vs_sma_close_10"] = safe_log_ratio(out["close"], out["sma_close_10"])
+    out["close_vs_sma_close_20"] = safe_log_ratio(out["close"], out["sma_close_20"])
+    out["cutoff_return_from_open"] = safe_log_ratio(out["close"], day_open)
+    out["cutoff_range_seen"] = safe_log_ratio(out["cutoff_high_seen"], out["cutoff_low_seen"])
+    out["cutoff_price_vs_prev_close"] = safe_log_ratio(out["close"], out["previous_close"])
+    out["log_volume"] = np.log1p(pd.to_numeric(out["volume"], errors="coerce").clip(lower=0).fillna(0.0))
+    out["log_slot_count"] = np.log1p(
+        pd.to_numeric(out["slot_count"], errors="coerce").clip(lower=0).fillna(0.0)
+    )
+    out["log_cutoff_volume_seen"] = np.log1p(out["cutoff_volume_seen"].clip(lower=0).fillna(0.0))
+    out["volume_vs_sma_volume_5"] = (
+        np.log1p(pd.to_numeric(out["volume"], errors="coerce").clip(lower=0).fillna(0.0))
+        - np.log1p(pd.to_numeric(out["sma_volume_5"], errors="coerce").clip(lower=0).fillna(0.0))
+    )
+    return out
+
+
+def prepare_production_features(
+    bars: pd.DataFrame,
+    feature_names: list[str],
+) -> pd.DataFrame:
+    """
+    Build the active production model's 176-feature vector from recent
+    `ml.market_data_15m` history for a single symbol.
+    """
+    dataset = derive_market_features(bars)
+
+    roll_cols = [
+        "close_open_log_return",
+        "high_low_log_range",
+        "pct_change_1",
+        "pct_change_5",
+        "log_return_1",
+        "cutoff_return_from_open",
+        "cutoff_range_seen",
+        "cutoff_price_vs_prev_close",
+        "cutoff_volume_seen",
+        "overnight_gap_pct",
+        "overnight_log_return",
+    ]
+    dataset = add_group_rolling_features_by_keys(
+        dataset,
+        group_cols=["symbol", "slot_idx"],
+        value_cols=[col for col in roll_cols if col in dataset.columns],
+        windows=[5, 10, 20, 60],
+        suffix_template="{col}_{stat}_{window}d",
+    )
+
+    short_roll_cols = [
+        "cutoff_return_from_open",
+        "cutoff_range_seen",
+        "cutoff_volume_seen",
+        "pct_change_1",
+    ]
+    dataset = add_group_rolling_features_by_keys(
+        dataset,
+        group_cols=["symbol", "slot_idx"],
+        value_cols=[col for col in short_roll_cols if col in dataset.columns],
+        windows=[5, 10, 20],
+        suffix_template="{col}_{stat}_{window}cut",
+    )
+
+    if dataset.empty:
+        raise ValueError("No engineered market rows available for production inference.")
+
+    last_row = dataset.sort_values("window_ts").iloc[[-1]].copy()
+    for col in feature_names:
+        if col not in last_row.columns:
+            last_row[col] = 0.0
     return last_row[feature_names].fillna(0.0).astype("float32")

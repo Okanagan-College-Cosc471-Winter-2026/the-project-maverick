@@ -5,11 +5,9 @@ Inference service for stock price predictions.
 import math
 from datetime import timedelta
 
-import pandas as pd
 from sqlalchemy.orm import Session
 
-from app.modules.inference.features import prepare_features_for_next_day
-# from app.modules.inference.features import prepare_features_for_prediction  # legacy
+from app.modules.inference.features import prepare_precomputed_features
 from app.modules.inference.model_loader import model_bundle
 from app.modules.inference.schemas import (
     NextDayBarPrediction,
@@ -85,46 +83,24 @@ class InferenceService:
     def _predict_next_day_path(session: Session, symbol: str) -> NextDayPredictionResponse:
         """
         Predict the full next-day 15-min price path using NextDayPathBundle.
-
-        NOTE: Feature engineering for this model (daily aggregates, premarket data,
-        intraday slot statistics) is a separate implementation task.  Until that
-        pipeline exists, this method will raise a KeyError listing missing columns.
         """
         # 1. Verify stock exists
         stock = crud.get_stock(session, symbol)
         if stock is None:
             raise ValueError(f"Stock not found: {symbol}")
 
-        # 2. Fetch 75 trading days of 15-min bars (needed for 60d rolling features)
-        bars = crud.get_bars_for_features(session, symbol, trading_days=75)
-        if not bars:
-            raise ValueError(f"No OHLC data available for {symbol}")
+        # 2. Load the latest engineered feature row matching the active bundle.
+        feature_row = crud.get_latest_inference_features(session, symbol, model_bundle.feature_names)
+        if feature_row is None:
+            raise ValueError(f"No engineered inference features available for {symbol}")
 
-        df = pd.DataFrame(
-            [
-                {
-                    "date": row.date,
-                    "open": row.open,
-                    "high": row.high,
-                    "low": row.low,
-                    "close": row.close,
-                    "volume": row.volume,
-                    "trade_count": row.trade_count,
-                    "vwap": row.vwap,
-                }
-                for row in bars
-            ]
-        )
+        current_price = float(feature_row["close"])
+        features = prepare_precomputed_features(feature_row, model_bundle.feature_names)
 
-        current_price = float(df["close"].iloc[-1])
-
-        # 3. Prepare features (will raise KeyError until aggregation pipeline exists)
-        features = prepare_features_for_next_day(df, model_bundle.feature_names)
-
-        # 4. Predict 26 log-returns
+        # 3. Predict 26 log-returns
         log_returns: list[float] = model_bundle.predict(features)
 
-        # 5. Convert log-returns to absolute prices
+        # 4. Convert log-returns to absolute prices
         path: list[NextDayBarPrediction] = [
             NextDayBarPrediction(
                 bar_idx=i,
@@ -134,17 +110,12 @@ class InferenceService:
             for i, lr in enumerate(log_returns)
         ]
 
-        # 6. Full-day return from last bar vs current price
+        # 5. Full-day return from last bar vs current price
         final_price = path[-1].pred_close
         predicted_full_day_return = (final_price / current_price - 1) * 100
 
-        # 7. Prediction date: next calendar day (follow-on task can make this smarter)
-        last_date = df["date"].iloc[-1]
-        if isinstance(last_date, str):
-            last_date = pd.to_datetime(last_date)
-        prediction_date = last_date + timedelta(days=1)
-        if isinstance(prediction_date, pd.Timestamp):
-            prediction_date = prediction_date.to_pydatetime()
+        # 6. Prediction date: next calendar day from the latest engineered bar.
+        prediction_date = feature_row["window_ts"] + timedelta(days=1)
 
         model_version = model_bundle.metadata.get("model_version", "nextday_15m_path_final")
 
