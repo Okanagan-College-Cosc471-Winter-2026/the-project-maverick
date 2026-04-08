@@ -2,6 +2,12 @@
 
 Market prediction platform built around a Postgres feature store, a FastAPI backend, trained model artifacts, and a Streamlit frontend.
 
+## Documentation Index
+
+- [ML and simulation docs](/home/cosc-admin/the-project-maverick/ml/README.md)
+- [April 7 replay workstream](/home/cosc-admin/the-project-maverick/ml/SIMULATION_APRIL7.md)
+- [Project documentation set](/home/cosc-admin/the-project-maverick/Documentation/)
+
 ## Current Stack
 
 - Data layer: PostgreSQL
