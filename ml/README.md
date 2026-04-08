@@ -8,6 +8,7 @@ Use this page as the ML documentation index when you need a presentation-friendl
 
 - [Project overview](/home/cosc-admin/the-project-maverick/README.md) for the full stack: Postgres, FastAPI, Streamlit, and model artifacts.
 - [April 7 simulation note](/home/cosc-admin/the-project-maverick/ml/SIMULATION_APRIL7.md) for the current replay workstream.
+- [Current database inventory](/home/cosc-admin/the-project-maverick/Documentation/Current_Database_Inventory.md) for the current schema and data snapshot.
 - [XGBoost handoff](/home/cosc-admin/the-project-maverick/Documentation/xgboost3_handoff.md) for deeper model and artifact background.
 - Demo walkthrough video: `https://www.loom.com/share/07f7584445dd41d389e720bd053ae7ea`
 
@@ -42,6 +43,7 @@ flowchart LR
 | Doc | Purpose |
 | --- | --- |
 | [SIMULATION_APRIL7.md](/home/cosc-admin/the-project-maverick/ml/SIMULATION_APRIL7.md) | Focused note for the April 7 replay workstream |
+| [Current_Database_Inventory.md](/home/cosc-admin/the-project-maverick/Documentation/Current_Database_Inventory.md) | Current DB snapshot, active schemas, and key table definitions |
 | [xgboost3_handoff.md](/home/cosc-admin/the-project-maverick/Documentation/xgboost3_handoff.md) | Technical handoff for the current XGBoost pipeline |
 | [Developers_Guide.md](/home/cosc-admin/the-project-maverick/Documentation/Developers_Guide.md) | Developer-oriented project reference |
 | [Installation_Guide.md](/home/cosc-admin/the-project-maverick/Documentation/Installation_Guide.md) | Local setup guide |

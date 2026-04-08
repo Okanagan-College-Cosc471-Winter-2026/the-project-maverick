@@ -6,7 +6,9 @@ Market prediction platform built around a Postgres feature store, a FastAPI back
 
 - [ML and simulation docs](/home/cosc-admin/the-project-maverick/ml/README.md)
 - [April 7 replay workstream](/home/cosc-admin/the-project-maverick/ml/SIMULATION_APRIL7.md)
+- [Current database inventory](/home/cosc-admin/the-project-maverick/Documentation/Current_Database_Inventory.md)
 - [Project documentation set](/home/cosc-admin/the-project-maverick/Documentation/)
+
 ## Demo
 
 [![Demo Walkthrough](https://cdn.loom.com/sessions/thumbnails/07f7584445dd41d389e720bd053ae7ea-with-play.gif)](https://www.loom.com/share/07f7584445dd41d389e720bd053ae7ea)
@@ -39,6 +41,7 @@ Market prediction platform built around a Postgres feature store, a FastAPI back
 - `backend/app/modules/simulation/service.py` simulation response builder
 - `ml/README.md` ML docs index
 - `ml/SIMULATION_APRIL7.md` April 7 replay note and demo context
+- `Documentation/Current_Database_Inventory.md` current DB snapshot, active schemas, and key table schema reference
 
 ## Current Stack
 
