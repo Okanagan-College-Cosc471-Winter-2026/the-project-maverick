@@ -4,10 +4,10 @@ Market prediction platform built around a Postgres feature store, a FastAPI back
 
 ## Documentation Index
 
-- [ML and simulation docs](/home/cosc-admin/the-project-maverick/ml/README.md)
-- [April 7 replay workstream](/home/cosc-admin/the-project-maverick/ml/SIMULATION_APRIL7.md)
-- [Current database inventory](/home/cosc-admin/the-project-maverick/Documentation/Current_Database_Inventory.md)
-- [Project documentation set](/home/cosc-admin/the-project-maverick/Documentation/)
+- [ML and simulation docs](./ml/README.md)
+- [April 7 replay workstream](./ml/SIMULATION_APRIL7.md)
+- [Current database inventory](./Documentation/Current_Database_Inventory.md)
+- [Project documentation set](./Documentation/)
 
 ## Demo
 
