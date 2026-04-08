@@ -9,6 +9,7 @@ Use this page as the ML documentation index when you need a presentation-friendl
 - [Project overview](/home/cosc-admin/the-project-maverick/README.md) for the full stack: Postgres, FastAPI, Streamlit, and model artifacts.
 - [April 7 simulation note](/home/cosc-admin/the-project-maverick/ml/SIMULATION_APRIL7.md) for the current replay workstream.
 - [XGBoost handoff](/home/cosc-admin/the-project-maverick/Documentation/xgboost3_handoff.md) for deeper model and artifact background.
+- Demo walkthrough video: `https://www.loom.com/share/07f7584445dd41d389e720bd053ae7ea`
 
 ## What This Area Covers
 
