@@ -1,0 +1,395 @@
+========================================================
+  TALKING NOTES — ML Algorithmic Trading Subteam
+  COSC 471 | Okanagan College | 2026
+========================================================
+
+--------------------------------------------------------
+SLIDE 1 — Title
+--------------------------------------------------------
+"Good [morning/afternoon]. We're the ML Algorithmic Trading subteam for COSC 471.
+Our project is a real-time stock price prediction platform — it ingests market data,
+runs it through an XGBoost model, and surfaces predictions in a live dashboard.
+My name is Zane, and presenting with me today are Harsh, Dante, Kaval, Parag, and Guntash.
+Let's walk you through the system."
+
+--------------------------------------------------------
+SLIDE 2 — Agenda
+--------------------------------------------------------
+"Here's what we'll cover today. We'll start with the customer and business requirements,
+walk through the architecture and the engineering standards we held ourselves to,
+then get into the actual code, testing results, and what we shipped in v1.0.0.
+We'll close with a live demo and leave ten to fifteen minutes for questions."
+
+--------------------------------------------------------
+SLIDE 3 — Team and Individual Responsibilities
+--------------------------------------------------------
+"Before we dive in, a quick overview of how we split the work.
+[Each person introduces their area here — fill in responsibilities per team member.
+For example: Zane owned CI/CD, backend infrastructure, and documentation.
+The frontend team built the Streamlit dashboard, chart views, and prediction overlays.
+The ML team handled feature engineering, model training, and artifact management.]"
+
+--------------------------------------------------------
+SLIDE 4 — Who Is the Customer?
+--------------------------------------------------------
+"We had two categories of stakeholders to think about.
+
+The primary stakeholders are you — the course instructors and evaluators — plus ourselves
+as the development team, and the external data APIs we depend on, like FMP, which impose
+rate limits that shaped some of our design decisions.
+
+But the end product is aimed at retail investors and day traders. Retail investors want a
+simple dashboard that shows whether a prediction was right or wrong — not a black box.
+Day traders care about low-latency data and technical indicators like RSI, MACD, and
+Bollinger Bands. Both groups want something accessible, not something that requires a
+PhD to set up."
+
+--------------------------------------------------------
+SLIDE 5 — Business Requirements
+--------------------------------------------------------
+"The core problem we're solving: retail investors don't have access to institutional-grade
+prediction tools, and the tools that do exist rarely tell you whether their predictions
+were actually correct. We wanted to change that.
+
+Our goals were concrete. Sub-100 millisecond predictions — this can't be a batch job that
+runs overnight. We persist every prediction alongside the actual outcome so accuracy is
+publicly verifiable over time. The whole stack deploys with a single 'docker compose up'
+so anyone can run it. And of course, everything had to meet the COSC 471 engineering
+outcomes."
+
+--------------------------------------------------------
+SLIDE 6 — Vision Document / Quality Bar
+--------------------------------------------------------
+"We set a clear, measurable quality bar at the start of the project and didn't move it.
+At least 80% pytest coverage, API latency under 100 milliseconds, and the system must
+be fully deployable via Docker. These three targets drove every engineering decision
+we made. We hit all three."
+
+--------------------------------------------------------
+SLIDE 7 — System Overview: Three Layers, One Pipeline
+--------------------------------------------------------
+"The system has three main layers.
+
+At the base is the data layer — Postgres stores 15-minute OHLCV bars for over 500 stocks,
+plus macro inputs like Treasury series. We also pre-compute all the ML features — RSI,
+MACD, Bollinger Bands, lag values, return columns, calendar fields — and store them
+alongside the raw bars. Postgres becomes the canonical source of truth for both training
+and inference.
+
+The middle layer is the backend. It ingests and updates that market data, computes features,
+trains XGBoost models, and saves the trained artifacts to disk. Critically, training and
+inference are fully decoupled — the inference service just loads a saved artifact and
+scores new rows. It doesn't retrain.
+
+The top layer is the frontend. It pulls the inference outputs from the backend and
+displays them — side-by-side charts comparing predicted prices against actual market
+movement, with a symbol selector and prediction overlays. This is what turns the ML
+pipeline into something you can actually demo and evaluate."
+
+--------------------------------------------------------
+SLIDE 8 — System Overview: End-to-End Lifecycle
+--------------------------------------------------------
+"This is the full lifecycle in one picture.
+
+Historical data and engineered features flow into Postgres.
+A training job reads from that store, trains the XGBoost model, and saves the artifact
+to model_artifacts/ on disk.
+Later, the inference service loads that saved artifact and scores fresh feature rows —
+no retraining, just fast scoring.
+The frontend then fetches those predictions and visualizes them against actual price behavior.
+
+This is important to understand: the system is not just a script that predicts.
+It's a repeatable ML pipeline with a data layer, a model lifecycle, and a serving path.
+Each stage is independently testable and auditable."
+
+--------------------------------------------------------
+SLIDE 9 — Architecture: Data Flow
+--------------------------------------------------------
+"[This slide contains the system architecture diagram — walk through it visually.]
+
+The flow starts with market data being polled and written into Postgres.
+Feature engineering runs on those raw bars to produce the ML-ready columns.
+Training reads from the feature store and produces a model artifact.
+Inference loads that artifact and scores the latest feature window.
+The frontend sits at the top and consumes those results through the REST API."
+
+--------------------------------------------------------
+SLIDE 10 — Configuration Management: Version Control
+--------------------------------------------------------
+"We used a modified Git Flow for version control. Main is always production-ready with
+version tags. Develop is the integration branch. Every feature, bug fix, and hotfix
+lives in its own branch and comes in through a pull request — no direct pushes to
+develop or main.
+
+For commit messages we followed the Conventional Commits standard: feat, fix, docs,
+refactor, test. This makes the git history machine-readable and gives us a clean
+changelog. Change requests went through GitHub Issues with a change-request label
+so every decision is tracked and reviewable."
+
+--------------------------------------------------------
+SLIDE 11 — CM: Internal Standards and Release Process
+--------------------------------------------------------
+"Every standard we talk about is enforced in CI, not just in documentation.
+If a pull request fails ruff linting, mypy type checking, or the test suite, it
+cannot merge. Full stop. That's not a suggestion — the CI gates block the merge.
+This kept the main branch clean throughout the entire project."
+
+--------------------------------------------------------
+SLIDE 12 — CI/CD Pipeline
+--------------------------------------------------------
+"Here's the actual pipeline. Five jobs run on every PR to main.
+
+Backend lint runs ruff check and format. Backend type check runs mypy.
+The backend test job is the most important one — it spins up a real Postgres 16
+container, runs Alembic migrations against it, then runs the full pytest suite.
+No mocks, no in-memory databases — real schema, real queries.
+Frontend lint runs Biome, and frontend build runs the production build.
+All five must pass before a PR can merge."
+
+--------------------------------------------------------
+SLIDE 13 — Planning Overview
+--------------------------------------------------------
+"We worked in two-week Agile sprints across four epics.
+
+Epic 1 was infrastructure — getting Git Flow, CI, Docker, and Alembic migrations
+in place before writing any feature code. Zane led this.
+Epic 2 was the core backend — polling, feature engineering, XGBoost, and the REST API.
+Epic 3 was visualization — the frontend charts, symbol selection, and prediction overlay.
+Epic 4 was QA and finalization — hitting the coverage target, finishing documentation,
+and preparing the deployment package.
+
+We finished with approximately 81% pytest coverage, just over our 80% target."
+
+--------------------------------------------------------
+SLIDE 14 — Risk Management
+--------------------------------------------------------
+"[Fill in your risk register content here. Suggested talking points:]
+
+Our primary technical risks were data availability — we depend on FMP as an external
+data source, which has rate limits and can go down.
+We mitigated this by storing everything in Postgres so inference never requires a live
+API call.
+
+The second risk was model drift — a model trained on historical data degrades over time.
+We mitigated this by decoupling training from inference so the model can be retrained
+and swapped without redeploying the service.
+
+The third risk was test coverage slipping. We mitigated this by enforcing the 80% gate
+in CI so it can't degrade silently."
+
+--------------------------------------------------------
+SLIDE 15 — Design: Key API Endpoints (summary)
+--------------------------------------------------------
+"The API is organized into focused endpoint groups.
+Health check confirms the backend is up.
+The inference endpoint takes a symbol, loads the saved XGBoost artifact, and returns
+a next-day prediction response. Unknown symbols return a 404, bad inputs return 400.
+The simulation endpoint runs 502 symbols across 26 intraday steps entirely from
+pre-computed CSVs — zero database I/O, so it's extremely fast.
+The market endpoints serve the stock list and OHLC bars for the charting layer."
+
+--------------------------------------------------------
+SLIDE 16 — Design: Domain Model and Layer Structure
+--------------------------------------------------------
+"The domain model has three core entities: Stock, which holds the ticker metadata;
+DailyPrice for the raw OHLC time series; and Prediction for the model output and
+confidence score. All API responses go through Pydantic v2 schemas for strict validation.
+
+The layer architecture is a clean stack: routers call services, services call CRUD
+functions, CRUD functions go through SQLAlchemy to Postgres.
+
+For inference specifically, there's a model loader that reads an environment variable
+called ACTIVE_MODEL to select which bundle to use. We have two bundle types:
+LegacyXGBBundle is a single XGBoost regressor with a meta file,
+and NextDayPathBundle is 26 separate models — one per 15-minute intraday step.
+The simulation module runs entirely off pre-computed CSVs."
+
+--------------------------------------------------------
+SLIDE 17 — Design: API Endpoints (simulation callout)
+--------------------------------------------------------
+"To highlight the scale of the simulation module — it covers 502 symbols across
+26 intraday steps. That's over 13,000 data points available instantly, with zero
+database queries. It all reads from pre-computed CSV files that were generated at
+training time. This is what makes the demo fast and reliable even without a live
+data connection."
+
+--------------------------------------------------------
+SLIDE 18 — Code: Backend Inference Route
+--------------------------------------------------------
+"This is the inference route. It's straightforward by design.
+
+The route receives a symbol, passes it uppercased to the InferenceService, and returns
+a NextDayPredictionResponse. Error handling is explicit — a ValueError that mentions
+'not found' becomes a 404, other ValueErrors become 400, and anything unexpected
+becomes a 500 with a message. This means the API always gives the caller enough
+information to know what went wrong without leaking internal stack traces."
+
+--------------------------------------------------------
+SLIDE 19 — Code: CI Pipeline
+--------------------------------------------------------
+"This is the backend test job in detail. It runs on ubuntu-latest and spins up a real
+Postgres 16 service container with a health check so the job doesn't start until the
+database is actually ready.
+
+We use uv for dependency management — it's significantly faster than pip.
+The job installs dependencies, runs Alembic migrations against the live container,
+then runs pytest. The fact that we're running real migrations in CI means if a
+migration breaks, we catch it in CI, not in production."
+
+--------------------------------------------------------
+SLIDE 20 — Code: Test DB Fixture
+--------------------------------------------------------
+"This fixture is the foundation of our integration tests. It runs at function scope,
+which means every single test gets a clean database state.
+
+Before the test runs, it deletes any pre-existing rows for the symbols under test.
+Then it seeds a known set of stocks and price data. The test runs. Then teardown
+runs unconditionally — even if the test throws an exception.
+
+This pattern guarantees test isolation. Tests can't interfere with each other, and
+there's no hidden state carrying over between runs."
+
+--------------------------------------------------------
+SLIDE 21 — Code: Testing the Inference Endpoint
+--------------------------------------------------------
+"Two tests worth highlighting here.
+
+The inference 404 test: we hit the predict endpoint with a fake symbol and assert we
+get a 404 with the string 'not found' in the detail message. This verifies that unknown
+symbol errors surface cleanly to the caller.
+
+The health check test: hits the health endpoint and asserts a 200 with a true response.
+Simple, but it's a fast smoke test that the backend is up and the DB connection works.
+
+I'll be transparent: the success-path inference test — where we seed data and assert a
+valid prediction comes back — is currently a placeholder. It's documented as KB-4 in
+the testing guide. We know what's needed to fix it; it requires a DB-seeded test with
+the model artifact accessible."
+
+--------------------------------------------------------
+SLIDE 22 — Code: Market Service Tests
+--------------------------------------------------------
+"These three tests cover the market data service layer.
+
+The first verifies that list_stocks returns a list of StockRead objects — not raw ORM
+models, not dicts — and that a seeded symbol has the right name.
+
+The second is subtle but important: get_ohlc must return Unix timestamps as integers,
+not Python date objects, because the frontend charting library expects epoch seconds.
+We explicitly assert the type and do a sanity check that the value is after year 2000.
+
+The third tests the empty case: a symbol that exists in the stocks table but has no
+price rows seeded should return an empty list, not an error."
+
+--------------------------------------------------------
+SLIDE 23 — Testing Results: Internal and UAT
+--------------------------------------------------------
+"42 isolated test cases, all running in under 4 seconds, at approximately 81% coverage.
+Every test runs against a real Postgres instance in CI — not mocks, not SQLite.
+
+UAT was conducted with the course instructor after the final demo session.
+The dashboard and API were accepted for course demonstration. Documentation
+completeness was confirmed. The testing guide was approved for the peer session."
+
+--------------------------------------------------------
+SLIDE 24 — Refactoring and Change Requests
+--------------------------------------------------------
+"All change requests were tracked through GitHub Issues with a change-request label,
+reviewed, and approved before any work started. Nothing was changed informally.
+
+The most impactful refactor was the async migration on the backend, which cut API
+latency from around 800 milliseconds down to under 100 — an 8x improvement.
+We also refactored the model loading into a versioned bundle system so we can swap
+models without touching the serving code."
+
+--------------------------------------------------------
+SLIDE 25 — Release v1.0.0
+--------------------------------------------------------
+"Version 1.0.0 shipped on March 24th with all CI gates green.
+
+What's in the box: the React dashboard with chart, symbol selector, and prediction
+overlay. The async FastAPI backend with six modular router groups. The XGBoost bundle
+system supporting both the legacy single-model format and the NextDayPath 26-model
+format. The full PostgreSQL schema managed by Alembic. The simulation module covering
+502 symbols across 26 intraday steps. And the complete documentation suite."
+
+--------------------------------------------------------
+SLIDE 26 — Reference from Customer / Instructor
+--------------------------------------------------------
+"UAT was run with the course instructor after the final demo.
+
+Feedback was positive — the dashboard and API were confirmed acceptable for course
+demonstration, documentation was complete, and the testing guide was approved for
+the peer session.
+
+For the peer testing session, we provided a handout — the COSC 471 Testing Guide —
+which gives students a step-by-step test matrix to follow. We pre-disclosed all known
+bugs in Section 5 of that guide so there were no surprises during testing."
+
+--------------------------------------------------------
+SLIDE 27 — Summary and Conclusion
+--------------------------------------------------------
+"To summarize what we delivered: a full-stack prediction platform that aligns to our
+original Vision and Business Case documents. Modular FastAPI backend with versioned
+XGBoost bundles. A simulation module that runs 502 symbols across 26 intraday steps
+with zero database I/O. A complete engineering process — Git Flow, Conventional
+Commits, CI/CD — and approximately 81% test coverage.
+
+What we're most proud of is that our tests hit a real database. No mocked fakes that
+give false confidence. The async refactor delivered an 8x latency improvement.
+
+We're being transparent about the known gaps: WebSocket streaming didn't make v1.0.0
+and is tracked as ISSUE-22 for v1.1. Docker image size is tracked as ISSUE-25 for a
+multi-stage build. The inference success-path test is KB-4 in the testing guide.
+None of these are surprises — they're documented and planned."
+
+--------------------------------------------------------
+SLIDE 28 — Live Demonstration Checklist
+--------------------------------------------------------
+"[Run through the demo steps live.]
+
+We'll start by confirming the stack is up — hitting the Swagger UI at port 8000 to
+show all six router groups are registered and healthy.
+
+Then we'll hit the health check endpoint for a quick sanity check.
+
+Next, we'll call the inference endpoint with a real symbol — AAPL — and show the
+prediction payload that comes back.
+
+Then we'll hit the simulation endpoint to show the 26-step intraday session across
+502 symbols.
+
+We'll switch to the frontend at port 5173, select a symbol, and show the chart
+updating with the prediction overlay.
+
+Finally, we'll open Adminer at port 8082 and show the live database tables —
+market.stocks and market.daily_prices — so you can see the actual data the model
+is running on."
+
+--------------------------------------------------------
+SLIDE 29 — Q&A
+--------------------------------------------------------
+"That's the presentation. We have ten to fifteen minutes for questions.
+
+Some topics we're prepared for:
+- Why XGBoost over other models
+- How we handle the async trade-offs in FastAPI
+- What the known test gaps mean in practice
+- What the v1.1 roadmap looks like
+- Model assumptions and why this is not financial advice
+
+[Open the floor.]"
+
+--------------------------------------------------------
+SLIDE 30 — Thank You
+--------------------------------------------------------
+"Thank you for your time. If you're participating in the peer testing session,
+the Testing Guide handout is available at
+Documentation/COSC471_Testing_Guide_Internal.md —
+it has the full test matrix and a list of known bugs so you know what to expect.
+
+We're happy to answer any follow-up questions."
+
+========================================================
+END OF TALKING NOTES
+========================================================
