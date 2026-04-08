@@ -7,6 +7,36 @@ Market prediction platform built around a Postgres feature store, a FastAPI back
 - [ML and simulation docs](/home/cosc-admin/the-project-maverick/ml/README.md)
 - [April 7 replay workstream](/home/cosc-admin/the-project-maverick/ml/SIMULATION_APRIL7.md)
 - [Project documentation set](/home/cosc-admin/the-project-maverick/Documentation/)
+- Demo walkthrough video: `https://www.loom.com/share/07f7584445dd41d389e720bd053ae7ea`
+
+## What Lives Where
+
+### Top-level folders
+
+- `backend/` FastAPI application, API modules, tests, and backend scripts
+- `frontend_streamlit/` active Streamlit UI and API client
+- `ml/` training code, feature engineering, data scripts, and ML documentation
+- `model_artifacts/` saved model bundles and replay outputs used by inference and simulation
+- `docker/` container build files for backend, Streamlit, and supporting services
+- `Documentation/` course and project documentation set
+- `tests/` repo-level test suites outside the backend package
+- `scripts/` utility scripts used at the repo level
+- `airflow/` orchestration-related configs, dags, and plugins
+- `datasets/` local dataset assets
+
+### Key files
+
+- `docker-compose.yml` main local stack definition
+- `backend/app/main.py` FastAPI app entrypoint
+- `frontend_streamlit/app.py` Streamlit app entrypoint
+- `frontend_streamlit/api.py` Streamlit-to-backend client layer
+- `ml/notebooks/XG_boost_3.py` main XGBoost training, prediction, and replay pipeline
+- `ml/scripts/refetch_market_data_15m_quality.py` bulk intraday backfill and quality workflow
+- `backend/app/modules/inference/service.py` live inference service logic
+- `backend/app/modules/simulation/loader.py` replay artifact loader for the simulation API
+- `backend/app/modules/simulation/service.py` simulation response builder
+- `ml/README.md` ML docs index
+- `ml/SIMULATION_APRIL7.md` April 7 replay note and demo context
 
 ## Current Stack
 
@@ -130,19 +160,6 @@ The current bulk-loading workflow uses a resumable `simple-fmp` mode that:
 - writes each symbol directly to Postgres
 - recomputes features per committed symbol
 - stores progress in `ml/data/quality_refetch_reports/simple_fmp_checkpoint.json`
-
-## Project Structure
-
-```text
-the-project-maverick/
-├── backend/                 # FastAPI application
-├── frontend_streamlit/      # Active Streamlit frontend
-├── ml/                      # Data and ML scripts
-├── model_artifacts/         # Saved model bundles
-├── docker/                  # Container definitions
-├── docker-compose.yml       # Main local stack
-└── Documentation/           # Supporting project docs
-```
 
 ## Notes
 

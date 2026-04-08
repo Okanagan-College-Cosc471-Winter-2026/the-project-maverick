@@ -10,7 +10,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.modules.inference.features import prepare_production_features
-from app.modules.inference.model_loader import model_bundle
+from app.modules.inference.model_loader import get_model_bundle
 from app.modules.inference.schemas import (
     NextDayBarPrediction,
     NextDayPredictionResponse,
@@ -96,6 +96,7 @@ class InferenceService:
         if not recent_bars:
             raise ValueError(f"No engineered inference features available for {symbol}")
 
+        model_bundle = get_model_bundle()
         bars_df = pd.DataFrame(recent_bars)
         features = prepare_production_features(bars_df, model_bundle.feature_names)
         latest_bar = bars_df.sort_values("window_ts").iloc[-1]
