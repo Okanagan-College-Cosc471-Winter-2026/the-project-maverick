@@ -2,11 +2,15 @@
 Simulation loader — reads and caches pre-computed prediction CSVs and replay metadata.
 
 Paths (relative to repo root):
-  Base:   model_artifacts/model_bundle_base_2026-03-20/
-  Replay: model_artifacts/warm_refresh_replay_2026-03-23/
+  Base:       model_artifacts/current_base        → symlink → base_2026-04-07/
+  Simulation: model_artifacts/current_simulation  → symlink → simulation_2026-04-07/
 
-NOTE: The base bundle's predictions/ directory is empty, so the "base" view uses
-step_00 of the warm-refresh replay (1,157 base trees, no warm refresh applied yet).
+To switch to a new simulation date, update the symlinks:
+  ln -sfn base_YYYY-MM-DD       model_artifacts/current_base
+  ln -sfn simulation_YYYY-MM-DD model_artifacts/current_simulation
+
+NOTE: The "base" view (no warm refresh) uses step_00 of the simulation
+(1,157 base trees, 0 warm trees added yet).
 """
 
 import json
@@ -21,8 +25,8 @@ logger = logging.getLogger(__name__)
 # backend/app/modules/simulation/loader.py  → 4 parents → backend/  → repo root
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
-_BASE_BUNDLE_PATH = _REPO_ROOT / "model_artifacts" / "model_bundle_base_2026-03-20"
-_REPLAY_PATH = _REPO_ROOT / "model_artifacts" / "warm_refresh_replay_2026-03-23"
+_BASE_BUNDLE_PATH = _REPO_ROOT / "model_artifacts" / "current_base"
+_REPLAY_PATH = _REPO_ROOT / "model_artifacts" / "current_simulation"
 _STEPS = 26
 
 
@@ -117,6 +121,13 @@ class SimulationLoader:
 
     def available_symbols(self) -> list[str]:
         return sorted(self._base_df["symbol"].unique().tolist())
+
+    def get_step_rankings(self, step: int) -> pd.DataFrame:
+        """Return all symbols for a step, sorted by predicted_full_day_return descending."""
+        df = self._step_dfs.get(step, pd.DataFrame())
+        if df.empty:
+            return df
+        return df.sort_values("predicted_full_day_return", ascending=False).reset_index(drop=True)
 
     # ------------------------------------------------------------------
     # Internals

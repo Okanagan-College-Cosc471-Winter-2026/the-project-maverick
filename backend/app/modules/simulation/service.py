@@ -100,8 +100,28 @@ class SimulationService:
         """Return session-level metadata for the frontend to build its step UI."""
         return SimSessionInfo(
             replay_date=simulation_loader.replay_date,
+            effective_as_of_date=simulation_loader.effective_as_of_date,
             steps_completed=simulation_loader.step_count,
             step_labels=simulation_loader.step_labels(),
             warm_trees_per_step=simulation_loader.warm_trees_per_step,
             base_trees=1157,
         )
+
+    @staticmethod
+    def step_rankings(step: int) -> list[dict]:
+        """Return all symbols ranked by predicted_full_day_return for a given step."""
+        if step < 0 or step >= simulation_loader.step_count:
+            raise ValueError(f"Step {step} out of range. Valid range: 0–{simulation_loader.step_count - 1}")
+        df = simulation_loader.get_step_rankings(step)
+        step_info = simulation_loader._step_info.get(step, {})
+        slot_label = step_info.get("slot_label", "")
+        return [
+            {
+                "rank": i + 1,
+                "symbol": str(row["symbol"]),
+                "slot_label": slot_label,
+                "predicted_full_day_return": round(float(row["predicted_full_day_return"]) * 100, 4),
+                "predicted_direction": str(row["predicted_direction"]),
+            }
+            for i, row in df.iterrows()
+        ]
