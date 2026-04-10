@@ -1,0 +1,519 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{balance}
+\usepackage{makecell}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{booktabs}
+
+\lstset{frame=none,
+  aboveskip=3mm,
+  belowskip=3mm,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color[rgb]{0,0.4,0},
+  stringstyle=\color{purple},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=4
+}
+
+\usepackage[letterpaper,%
+            left=0.75in,right=0.75in,top=0.75in,bottom=1in,%
+            footskip=.25in,bindingoffset=0.2in]{geometry}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\makeatletter
+\newcommand{\linebreakand}{%
+ \end{@IEEEauthorhalign}
+ \hfill\mbox{}\par
+ \mbox{}\hfill\begin{@IEEEauthorhalign}
+}
+
+\title{Intraday Equity Return Path Prediction Using GPU-Accelerated XGBoost with Warm-Refresh Simulation on HPC Infrastructure}
+
+\author{
+
+   \IEEEauthorblockN{Harsh Saw}
+    \IEEEauthorblockA{\textit{Computer Science} \\
+    \textit{Okanagan College}\\
+    Kelowna, Canada \\}
+
+    \and
+
+
+    \IEEEauthorblockN{Kristina Cormier}
+    \IEEEauthorblockA{\textit{Computer Science} \\
+    \textit{Okanagan College}\\
+    Kelowna, Canada \\
+    0009-0004-3783-9704}
+
+ \and
+
+    \IEEEauthorblockN{Albert Wong}   \IEEEauthorblockA{\textit{Mathematics and Statistics}
+    \\\textit{Langara College}\\
+    Vancouver, Canada \\
+    0000-0002-0669-4352}
+
+      \and
+
+    \IEEEauthorblockN{Dolcy Sareen}
+    \IEEEauthorblockA{\textit{Computer Science} \\
+    \textit{Okanagan College}\\
+    Kelowna, Canada \\
+    ???}
+
+
+
+    \and
+
+    \IEEEauthorblockN{Youry Khmelevsky}
+    \IEEEauthorblockA{\textit{Computer Science} \\
+    \textit{Okanagan College}\\
+    Kelowna, Canada \\
+    0000-0002-6837-3490}
+
+    \IEEEauthorblockN{Ga\'etan Hains}
+    \IEEEauthorblockA{ \textit{LACL} \\
+    \textit{Universit\'e Paris-Est}\\
+    Cr\'eteil, France \\
+    0000-0002-1687-8091}
+
+    \and
+
+
+
+    \IEEEauthorblockN{Ajitesh}
+    \IEEEauthorblockA{\textit{Computer Science} \\
+    \textit{Okanagan College}\\
+    Kelowna, Canada \\
+    }
+
+}
+
+\maketitle
+
+%%%%%%%%%%%%% AI Guidelines for AI-Generated Content %%%
+
+% The use of Artificial Intelligence (AI) and large-scale language models (LLMs) in paper submissions is governed by specific rules.
+% Disclosure is Mandatory: The use of AI-generated text or Content must be disclosed in the acknowledgments section.
+% Authors remain fully responsible for the correctness, originality, and veracity of all submitted Content.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{abstract}
+Algorithmic trading systems increasingly rely on machine learning models capable of extracting weak predictive signals from high-frequency financial data. This study presents the design and evaluation of an automated forecasting pipeline for multi-horizon intraday equity return path prediction using gradient-boosted decision trees. The system integrates automated data collection, a feature-engineered data warehouse, GPU-accelerated model training, and a warm-refresh simulation framework into a unified architecture deployed on Digital Research Alliance of Canada (DRAC) high-performance computing infrastructure.
+
+The forecasting model is based on XGBoost and is trained on 15-minute OHLCV bars for a universe of 504 equities drawn from a pre-engineered market data table containing approximately 4.77~million bar-level training observations spanning March~2024 to April~2026. The prediction task is formulated as a multi-output regression problem: 26 independent XGBoost regressors each target one horizon of the next trading day's regular-session path at 15-minute intervals, with each target defined as a log-return relative to the current bar's close. A 176-dimensional cutoff-aware feature space constructed from price dynamics, rolling volatility statistics, intraday session-progress indicators, and overnight-gap structure enables predictions to be issued from any point within the trading day, not only at session close. Hyperparameters are optimized using the Optuna framework, and model training is accelerated using CUDA-enabled NVIDIA H100 GPUs scheduled through the Slurm workload manager.
+
+The primary contribution of this work is the development of a scalable end-to-end modelling workflow that integrates financial data infrastructure with GPU-accelerated machine learning for continuous retraining of predictive trading models. The deployed base model uses 400 boosted trees trained with a fast-refresh profile optimized for operational retraining speed. A warm-refresh simulation on 2026-04-07 demonstrates that the base model can be augmented with 30 fresh trees at each of 26 intraday time steps---growing the ensemble from 400 to 1{,}180 trees---across all 504 symbols in under 7~seconds per step on an H100 GPU, with the entire 26-step simulation completing in approximately 9~minutes of wall time. Prediction analysis across the simulation steps shows that the model adapts its directional forecasts as new intraday data arrives, with the proportion of bearish forecasts increasing from 55\% at market open to 63\% by session close on the evaluation date. The resulting pipeline supports automated daily retraining and delivers predicted return paths through a business-intelligence dashboard for downstream analysis.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Algorithmic Trading, Machine Learning, XGBoost, Warm-Start Ensemble, High Performance Computing, Financial Forecasting, Intraday Path Prediction
+\end{IEEEkeywords}
+
+% ============================================================
+%  SECTION I --- INTRODUCTION
+% ============================================================
+\section{Introduction}
+
+Financial markets generate massive streams of high-frequency data that present both opportunities and challenges for predictive modelling. While algorithmic trading strategies aim to exploit short-term patterns in price behaviour, the signal-to-noise ratio in financial time series is typically extremely low. As a result, predictive models must be able to capture subtle nonlinear relationships while remaining robust to overfitting and rapidly changing market conditions.
+
+Machine learning methods have been applied with growing success to financial return prediction tasks, with recent large-scale comparisons demonstrating that tree-based ensemble methods consistently rank among the strongest approaches for cross-sectional equity forecasting~\cite{gu2020empirical}. Gradient-boosted decision tree ensembles, in particular, have shown strong performance on structured tabular financial datasets due to their native handling of feature interactions, missing values, and heterogeneous input scales~\cite{krauss2017deep}. The XGBoost framework~\cite{chen2016xgboost} provides an efficient and well-regularized implementation of gradient boosting that supports histogram-based splitting, column subsampling, and GPU-accelerated training. These properties make it well suited for short-horizon financial forecasting, where the predictive signal is weak relative to noise and the risk of overfitting is substantial.
+
+This research extends a broader algorithmic trading research platform that integrates automated data collection, data warehousing, and high-performance computing resources for financial modelling experiments. The system collects intraday market data, processes and stores it within a structured data warehouse environment, and provides model-ready datasets for downstream machine learning workflows. By integrating research data infrastructure with machine learning pipelines, the platform enables reproducible experimentation and scalable training of predictive models.
+
+The primary objective of this paper is to design and evaluate an automated forecasting workflow for \emph{intraday return path prediction} using XGBoost. Rather than predicting a single end-of-day return, the system forecasts the next regular-session price trajectory as 26 log-return targets at 15-minute intervals, each modelled by an independent XGBoost regressor. The model is trained on 15-minute OHLCV bars for a universe of 504~equities using a 176-dimensional cutoff-aware feature space that captures price dynamics, rolling volatility statistics, session-progress state, and overnight-gap structure. A key architectural decision is that each training observation corresponds to a single 15-minute bar rather than a full trading day, enabling the model to issue predictions from any intraday cutoff point. This bar-level design directly supports the warm-refresh simulation in which the ensemble is incrementally augmented with new trees as the trading session progresses.
+
+Rather than fitting independent models for each stock, the system employs a global cross-sectional approach in which a single set of regressors learns shared patterns across the entire equity universe, enabling the model to exploit both time-series regularities and cross-sectional structure.
+
+GPU-accelerated training on NVIDIA H100 GPUs, hyperparameter optimization using the Optuna framework~\cite{akiba2019optuna}, and job scheduling through the Slurm workload manager enable systematic experimentation on datasets spanning several years of intraday market activity across hundreds of securities.
+
+The contributions of this work are fivefold:
+\begin{enumerate}
+    \item An end-to-end machine learning pipeline that integrates financial data engineering, feature construction, GPU-accelerated gradient-boosted modelling, and automated hyperparameter optimization within a research computing infrastructure supporting daily retraining.
+
+    \item A multi-horizon path prediction formulation in which 26 independent XGBoost regressors forecast the next trading day's full regular-session trajectory at 15-minute resolution from a bar-level, cutoff-aware feature representation.
+
+    \item A 176-dimensional feature space designed around intraday session state (bars seen, cumulative volume, running high/low, return from session open) and rolling statistics at multiple lookback horizons, enabling predictions to be issued from any point within the trading session.
+
+    \item A warm-refresh simulation framework in which the base ensemble of 400 trees is incrementally augmented by 30 fresh trees at each of 26 intraday time steps, growing the ensemble to 1{,}180 trees, demonstrated across 504~equities in under 7~seconds per step on an H100 GPU, with the full simulation completing in approximately 9~minutes.
+
+    \item A realized single-day evaluation against live market data on 2026-04-07 that provides an honest end-to-end assessment of the pipeline operating at production scale and speed.
+\end{enumerate}
+
+Predicting the full intraday path rather than a single end-of-day return offers several practical advantages. First, the path reveals \emph{when} during the trading session the expected price movement occurs, which is directly relevant for trade execution timing and intraday position management. Second, the shape of the predicted path provides implicit information about intraday volatility and drawdown risk that a point forecast cannot capture. Third, horizon-wise prediction enables a richer evaluation framework: rather than reducing model quality to a single accuracy number, the path formulation allows analysis of where in the trading day the model adds value and where its signal decays. While multi-step-ahead forecasting has been studied in the broader time-series literature~\cite{taieb2012review}, its application to intraday equity return prediction across a large cross-sectional universe with an incrementally updated ensemble remains relatively unexplored.
+
+% ============================================================
+%  SECTION II --- EXISTING WORKS
+% ============================================================
+\section{Existing Works}\label{sec:related}
+
+The application of machine learning to financial return prediction has grown substantially over the past decade. Gu~et~al.~\cite{gu2020empirical} conduct a comprehensive comparison of machine learning methods for cross-sectional equity pricing and find that tree-based ensemble models---particularly gradient-boosted trees---achieve strong out-of-sample predictive performance relative to linear benchmarks and deep neural networks. Fischer and Krauss~\cite{fischer2018deep} evaluate long short-term memory networks for S\&P~500 return prediction and confirm that ensemble-based approaches remain competitive with deep architectures on structured financial features. Several survey works~\cite{sezer2020financial, jiang2021applications, ghoddusi2019machine} document the expanding use of both traditional machine learning and deep learning methods for financial time-series tasks including price forecasting, volatility estimation, and portfolio optimization. Mullainathan and Spiess~\cite{mullainathan2017machine} provide a complementary econometric perspective, arguing that machine learning is most useful in prediction-oriented financial tasks where interpretability can be traded for out-of-sample accuracy. A common finding across these studies is that the low signal-to-noise ratio in financial returns~\cite{fama1970efficient} demands careful regularization and model selection to avoid overfitting, particularly at shorter prediction horizons where the signal is weakest.
+
+While most financial prediction studies target a single return horizon, the broader time-series forecasting literature has extensively studied multi-step-ahead prediction. Lim and Zohren~\cite{lim2021time} survey deep learning approaches for time-series forecasting and distinguish three principal strategies for multi-horizon prediction: the \emph{recursive} approach, which feeds one-step predictions back as inputs for subsequent steps; the \emph{direct} approach, which trains an independent model for each horizon; and the \emph{multi-input--multi-output} (MIMO) approach, which jointly predicts all horizons in a single model. The direct strategy avoids the error accumulation inherent in recursive forecasting but does not exploit dependencies across horizons. In the financial domain, L\'opez de~Prado~\cite{lopezdeprado2018afml} argues that intraday bar-level structures and volume-clock sampling offer richer predictive targets than daily aggregates, and that machine learning pipelines should be designed to exploit these fine-grained temporal features. Despite this motivation, relatively few published studies apply a direct multi-horizon forecasting framework to intraday equity return paths across a large cross-sectional stock universe.
+
+Training machine learning models on financial data at production scale introduces infrastructure and methodological challenges beyond model selection. Financial markets exhibit non-stationarity and concept drift~\cite{widmer1996learning}, meaning that the data-generating process changes over time and models must be retrained regularly to maintain predictive relevance. High-performance computing environments provide the computational resources necessary for systematic hyperparameter search and frequent retraining cycles~\cite{drac2026hpc, Colonnelli2021StreamFlow}. Recent work has highlighted the importance of integrating HPC resources with AI workflows to address I/O bottlenecks, reproducibility, and orchestration challenges that arise when scaling machine learning experiments~\cite{lewis2025io, badia2024dagstuhl}. Peng~\cite{peng2011reproducible} argues more broadly that computational science benefits from reproducible research practices, a principle that motivates the automated, version-controlled pipeline design adopted in this work.
+
+XGBoost's built-in support for \emph{warm-start} training---continuing boosting from an existing model checkpoint---has been used in online learning and concept-drift adaptation settings~\cite{chen2016xgboost}, but its application to intraday financial simulation, where the ensemble is incrementally augmented at each 15-minute bar as new market data arrives, has not been systematically demonstrated at the scale reported here.
+
+Despite substantial progress in machine learning for financial prediction and in multi-step time-series forecasting as independent research areas, relatively few studies combine a multi-horizon intraday path formulation, a global cross-sectional model trained across hundreds of equities, an incrementally updated ensemble via warm-start boosting, and an automated HPC-based training pipeline with systematic hyperparameter optimization. This work addresses that intersection by integrating these elements within a unified forecasting workflow.
+
+% ============================================================
+%  SECTION III --- RESEARCH METHODOLOGY
+% ============================================================
+\section{Research Methodology and Project Design}\label{sec:methodology}
+
+This project follows a design-science and experimental machine learning methodology for short-horizon equity forecasting. The central objective is to predict the next regular trading session as a sequence of 15-minute returns rather than as a single end-of-day movement. To do so, the project combines a pre-engineered market-data table, a cutoff-aware feature construction pipeline, a multi-horizon XGBoost modelling framework, and an HPC-supported experimentation workflow. The methodology is structured to support both research exploration and operational repeatability: market data are collected and loaded into a feature-engineered flat table, transformed into bar-level observations with rolling statistics, used to train and compare multiple model configurations, and finally evaluated through a warm-refresh simulation against realized market outcomes.
+
+From a project-design perspective, the work is organized as a layered pipeline. At the data layer, historical 15-minute equity bars with pre-computed lag, moving-average, and overnight-gap features are stored in a PostgreSQL table (\texttt{ml.market\_data\_15m}), providing a clean, model-ready data source. At the feature construction layer, each bar is enriched with cutoff-aware session-state features (bars seen, cumulative volume, running high/low, return from session open) and rolling statistics at multiple lookback horizons. At the modelling layer, these bar-level records are used to train a global cross-sectional predictor that learns from all stocks simultaneously. At the systems layer, the entire workflow is designed for reproducibility and rerun capability on the Digital Research Alliance of Canada computing environment~\cite{drac2026hpc,peng2011reproducible}.
+
+\subsection{Modelling Strategy}
+The methodological focus is to estimate the next-day intraday return path for each stock as a 26-step prediction problem, where each step corresponds to one 15-minute bar in the next regular session. Instead of training a separate model for each stock, the project adopts a global modelling strategy in which a single feature space is constructed across the full 504-equity universe and a shared learner is fit to all bar-level observations. This design increases the effective sample size substantially and allows the model to capture both time-series and cross-sectional regularities. The core learner is XGBoost, selected because gradient-boosted trees are highly effective for structured tabular data, scalable to large feature sets, and robust to nonlinear interactions and mixed feature types~\cite{friedman2001greedy,chen2016xgboost}.
+
+A direct multi-horizon forecasting strategy is used: one independent regressor is trained for each of the 26 future horizons. This avoids the error propagation typically associated with recursive forecasting and makes the framework suitable for full-path prediction~\cite{lim2021time}. The bar-level formulation is a deliberate architectural decision: because each observation corresponds to a single 15-minute bar with associated session-progress state, the same trained model can generate predictions at any intraday cutoff point, which is the foundation of the warm-refresh simulation described in Section~\ref{sec:warmrefresh}.
+
+\subsection{Data Source and Preparation}
+The data source is the \texttt{ml.market\_data\_15m} table in PostgreSQL, which stores 15-minute OHLCV bars for the equity universe with pre-computed features including lagged closes, price differences, percentage changes, log returns, simple moving averages, day-of-week and session-time encodings, and overnight-gap statistics. These features are computed at insert time, ensuring a single authoritative source of truth and eliminating feature-computation discrepancies between training and inference.
+
+The training dataset covers the period from 2024-03-25 to 2026-04-06, spanning approximately 24~months of market activity for 504~equities. After filtering for complete regular sessions and removing bars at the start of each symbol's history where rolling lookback windows are incomplete, the resulting dataset contains approximately 4.77~million bar-level observations. Each observation is a single 15-minute bar carrying its associated features and a 26-element target vector.
+
+\subsection{Feature Construction}\label{sec:featureeng}
+The 176-dimensional feature space is constructed from five categories of engineered variables:
+
+\begin{enumerate}
+    \item \textbf{Database-precomputed features} (39 columns): Raw OHLCV fields, lagged close prices at 1/5/10-bar lookbacks, close differences, percentage changes, log returns, simple moving averages of close and volume at multiple windows, day-of-week and session-time one-hot encodings, and overnight-gap statistics (gap percentage, log return, gap-up/gap-down indicators).
+
+    \item \textbf{Cutoff-aware session state} (13 columns): Features that describe the model's information horizon at prediction time---\texttt{slot\_idx}, \texttt{bars\_seen}, \texttt{bars\_remaining}, \texttt{intraday\_progress}, \texttt{cutoff\_close}, \texttt{cutoff\_high\_seen}, \texttt{cutoff\_low\_seen}, \texttt{cutoff\_volume\_seen}, and \texttt{cutoff\_return\_from\_open}. These features encode how far into the trading session the observation falls and what price and volume activity has been observed up to that point.
+
+    \item \textbf{Derived log-ratios and price structure} (12 columns): Log-ratios of the current close against lagged closes and moving averages (\texttt{close\_vs\_sma\_close\_5/10/20}, \texttt{close\_vs\_lag\_close\_1/5/10}), bar-level open--close and high--low log ranges, and log-transformed volume measures.
+
+    \item \textbf{Rolling day-level statistics} (88 columns): Rolling means and standard deviations of 11 derived variables computed over 5-, 10-, 20-, and 60-day lookback windows, grouped by symbol and slot index. These capture how the current bar's return, range, volume, and overnight gap compare to recent history at the same time of day.
+
+    \item \textbf{Rolling cutoff-level statistics} (24 columns): Rolling means and standard deviations of 4 cutoff-aware variables over 5-, 10-, and 20-bar lookback windows, capturing short-term cutoff-specific patterns such as recent intraday momentum and volume trends.
+\end{enumerate}
+
+All floating-point feature columns are downcast from 64-bit to 32-bit precision to reduce memory consumption during GPU training. Winsorization at the 0.5th and 99.5th percentiles is applied to return-based and volume-based features to limit the influence of extreme outliers~\cite{aggarwal2015datamining}.
+
+\subsection{Target Definition}\label{sec:targets}
+For each bar observation at time $t$ with slot index $s$, the target for horizon $h \in \{0,\dots,25\}$ is defined as the log-return from the current bar's close to the next trading day's regular-session close at horizon $h$:
+\[
+y_{t,h} = \log\!\left(\frac{P_{\mathrm{next},h}}{P_{t,\mathrm{close}}}\right), \qquad h=0,\dots,25.
+\]
+This formulation transforms the problem into a path-prediction task over the full next regular session. It captures not only the terminal direction of the next day but also the intermediate structure of the intraday path. To preserve data quality, the pipeline restricts training to bars from complete regular sessions containing all 26 bars, and an anomaly guard of $|y_{t,h}| \leq 1.5$ is applied to filter implausible target magnitudes.
+
+\subsection{Evaluation Approach}
+Performance is evaluated at two levels. During hyperparameter selection, expanding-window cross-validation with temporal ordering is used to prevent future observations from entering the training set. At deployment, a warm-refresh simulation replays an entire trading day bar by bar, incrementally augmenting the base model and generating predictions at each step. The simulation predictions can then be compared against realized market outcomes. This two-level design separates model-selection performance from genuine forward-looking performance under realistic operational conditions.
+
+% ============================================================
+%  SECTION IV --- DATA COLLECTION AUTOMATION
+% ============================================================
+\section{Data Collection Automation Using DRI Resources}\label{sec:DataCollection}
+
+This project was developed in the context of \textit{COSC~471}, where the main objective was to design and evaluate a practical data pipeline for machine learning-based financial forecasting. A major requirement was the automated collection of large volumes of market data at regular time intervals. Digital Research Alliance of Canada (DRI) resources were used to provide the computing, storage, and database infrastructure needed for reliable data acquisition.
+
+The automation process combines locally developed Python scripts with DRI-hosted cloud and high-performance computing resources. Historical and real-time stock market data are retrieved from external APIs, validated, and transferred into PostgreSQL staging tables for further cleaning and transformation. This approach reduces manual intervention, improves repeatability, and allows the system to scale as the volume of collected records increases.
+
+The collected data is subsequently loaded into the \texttt{ml.market\_data\_15m} table, where feature pre-computation occurs at insert time. This table serves as the single source of truth for all downstream modelling, ensuring that training and inference use identical feature definitions.
+
+% ============================================================
+%  SECTION V --- PROJECT ARCHITECTURE
+% ============================================================
+\section{Project Architecture, Design and Testing for DRI Modelling}\label{sec:architecture}
+
+The modelling system is implemented as a multi-stage pipeline that connects the feature-engineered market data table to a set of trained XGBoost regressors and a downstream prediction delivery interface. The pipeline is implemented in the \texttt{XG\_boost\_3\_multigpu\_final.py} script and is designed to support both systematic experimental sweeps and daily production retraining once the winning configuration is fixed. The four principal stages are: (i)~bar extraction from \texttt{ml.market\_data\_15m}; (ii)~session filtering, cutoff-aware feature construction, and rolling-statistic enrichment; (iii)~target construction and model training; and (iv)~prediction generation and artefact persistence. A reproducible experiment structure ensures that each run logs its configuration, metrics, and model artefacts to a date-partitioned output directory~\cite{peng2011reproducible}.
+
+\subsection{Data Source and Extraction}\label{sec:datasource}
+
+The data source is a denormalized flat table, \texttt{ml.market\_data\_15m}, which stores one row per (symbol, 15-minute window) with pre-computed features. The table schema includes OHLCV fields, lagged closes, price differences, percentage changes, log returns, simple moving averages, day-of-week and session-time one-hot encodings, overnight-gap statistics, and a \texttt{status} column that distinguishes confirmed bars from provisional data. The pre-computation of features at insert time eliminates the star-schema join overhead and guarantees that training and inference use identical feature definitions.
+
+For the current production model, the extraction covers 504~equities across the period 2024-03-25 to 2026-04-06, yielding approximately 4.77~million bar-level observations after filtering for complete regular sessions and non-provisional status.
+
+\subsection{Feature Construction Pipeline}
+
+The extraction pipeline enriches each raw bar with the 176-dimensional feature vector described in Section~\ref{sec:featureeng}. The cutoff-aware features (\texttt{bars\_seen}, \texttt{cutoff\_close}, \texttt{cutoff\_return\_from\_open}, etc.) are derived from cumulative aggregations within each symbol-day session. Rolling day-level statistics are computed over 5-, 10-, 20-, and 60-day lookback windows, while rolling cutoff-level statistics use 5-, 10-, and 20-bar lookbacks. The resulting feature matrix is stored in memory for model fitting; transformed observations are not persisted back to the database.
+
+\subsection{Cross-Validation and Experiment Design}\label{sec:cvdesign}
+
+Model selection uses an expanding-window cross-validation scheme with five folds, in which each successive fold extends the training window by approximately one additional trade-month while holding out a fixed block of test observations~\cite{lopezdeprado2018afml, geron2019handson}. A temporal split---rather than a random split---is essential for financial time-series data because it prevents future observations from entering the training set and provides a realistic approximation of deployment conditions~\cite{tsay2010financial}.
+
+The experiment sweep tests three rolling training window lengths (18, 24, and 48~months) and four hyperparameter variant presets, yielding 12~base configurations. Optuna hyperparameter optimisation~\cite{optuna_2019} is subsequently applied to the top candidates, with 20~trials per configuration executed on the DRAC GPU environment. The winning configuration---an 18-month window with a deep-regularized variant---is identified by mean RMSE rank across all five folds and is retained for production deployment. All experiment runs are logged to a structured output directory with configuration files, per-fold metrics, and serialised model artefacts~\cite{peng2011reproducible}.
+
+Once the winning hyperparameter configuration is selected, the production base model is trained on the full dataset without cross-validation folds (\texttt{direct\_train} mode) to maximize the available training data. This is a standard two-stage workflow: cross-validation for model selection, followed by a full-data retrain for deployment.
+
+\begin{figure*}[ht]
+\centering
+\includegraphics[width=0.95\textwidth]{images/DataFlow.png}
+\caption{Data Flow}
+\label{fig:dataflow}
+\end{figure*}
+
+\begin{figure*}[ht]
+\centering
+\includegraphics[width=1.0\textwidth]{images/core_dw.jpg}
+\caption{Core Data Warehouse}
+\label{fig:core_dw}
+\end{figure*}
+
+% ============================================================
+%  SECTION VI --- XGBOOST MODELLING
+% ============================================================
+\section{XGBoost Modelling and Training Setup}\label{sec:modelsetup}
+
+This section describes the modelling configuration used for the current forecasting study. The system is trained on a universe of 504~equities using 15-minute OHLCV bars extracted from \texttt{ml.market\_data\_15m}. Each bar-level observation is represented by a 176-dimensional feature vector covering price dynamics, cutoff-aware session state, derived log-ratios, and rolling statistics at multiple lookback horizons.
+
+The forecasting task is formulated as direct multi-horizon regression. For each bar observation at time~$t$ and each horizon $h \in \{0,\dots,25\}$, the target is:
+\[
+y_{t,h} = \log\!\left(\frac{P_{\mathrm{next},h}}{P_{t,\mathrm{close}}}\right).
+\]
+The model is trained as a global cross-sectional system rather than as separate per-symbol models. A shared set of 26~XGBoost regressors learns from all bar-level observations jointly, which increases the effective sample size and allows the system to exploit both time-series and cross-sectional structure.
+
+\subsection{Preprocessing for Model Training}
+
+Before model fitting, the extracted bars are checked for basic integrity, including invalid high--low relationships, duplicate timestamps, and missing or non-finite values generated during feature construction. Most dropped rows occur near the beginning of each symbol's history, where rolling lookback windows are incomplete and longer-horizon rolling features cannot yet be computed.
+
+After feature generation, infinite values are replaced with missing values and any observation containing invalid inputs or targets is excluded from modelling. To improve memory efficiency during GPU training, floating-point feature columns are downcast from 64-bit to 32-bit precision.
+
+\subsection{XGBoost Model Configuration}
+
+XGBoost was selected as the forecasting model because it performs well on structured tabular data, supports nonlinear feature interactions, and provides efficient regularization for noisy prediction tasks~\cite{friedman2001greedy,chen2016xgboost}. The model was configured as a gradient-boosted regression ensemble using the squared-error objective (\texttt{reg:squarederror}) and RMSE as the primary evaluation metric. Histogram-based tree construction (\texttt{tree\_method=hist}) and CUDA acceleration (\texttt{device=cuda}) were used to support efficient training on DRAC H100 GPU resources. The remaining hyperparameters were tuned through Optuna as described below.
+
+\subsection{Hyperparameter Profiles}
+
+The pipeline defines two fixed XGBoost profiles, each tuned for a different operational purpose:
+
+\begin{itemize}
+    \item \textbf{Deep-regularized profile} (\texttt{BEST\_FIXED\_VARIANT}): a conservative long-window configuration with learning rate 0.0159, maximum depth~4, 1{,}157 estimators, and strong L1/L2 regularization. This profile was selected through an Optuna hyperparameter search~\cite{optuna_2019} with 20 trials on the DRAC GPU environment and is intended for stable base-model training where maximum predictive accuracy is prioritized.
+
+    \item \textbf{Fast-refresh profile} (\texttt{FAST\_REFRESH\_VARIANT}): a shorter operational configuration with learning rate 0.03, maximum depth~4, 400 estimators, and moderate regularization. This profile is designed for rapid retraining and warm-refresh cycles where training speed is prioritized.
+\end{itemize}
+
+The deployed April~2026 base model uses the fast-refresh profile to balance training throughput with predictive quality across the 504-equity universe. The hyperparameter values for both profiles are summarized in Table~\ref{tab:hpo}.
+
+\begin{table}[h]
+\centering
+\caption{XGBoost hyperparameter profiles.}
+\label{tab:hpo}
+\begin{tabular}{lll}
+\hline
+\textbf{Parameter}    & \textbf{Deep-Reg.} & \textbf{Fast-Refresh} \\
+\hline
+n\_estimators         & 1{,}157   & 400   \\
+learning\_rate        & 0.0159    & 0.03  \\
+max\_depth            & 4         & 4     \\
+min\_child\_weight    & 7.8       & 6.0   \\
+subsample             & 0.849     & 0.85  \\
+colsample\_bytree     & 0.745     & 0.75  \\
+reg\_alpha            & 0.992     & 0.5   \\
+reg\_lambda           & 3.984     & 2.5   \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Training Environment and Execution}
+
+Model training was executed on the Digital Research Alliance of Canada (DRAC) HPC environment, with GPU jobs scheduled through the Slurm workload manager~\cite{alliance_scheduler}. XGBoost training uses CUDA acceleration on NVIDIA H100 GPUs. The base model, trained on approximately 4.77~million observations with 176 features and 400 estimators across 26 horizons, required approximately 1{,}909~seconds ($\sim$32~minutes) of GPU time. The training workflow can be launched either interactively for development or through scheduled batch execution for operational daily retraining.
+
+\subsection{Base Model Summary}
+
+Table~\ref{tab:basemodel} summarises the key parameters of the deployed base model.
+
+\begin{table}[h]
+\centering
+\caption{Base model configuration and training statistics.}
+\label{tab:basemodel}
+\begin{tabular}{ll}
+\hline
+\textbf{Parameter} & \textbf{Value} \\
+\hline
+Model ID & \texttt{base\_20260407\_xg3} \\
+Training data & 2024-03-25 to 2026-04-06 \\
+Equity universe & 504 symbols \\
+Training observations & 4{,}765{,}679 bars \\
+Features per observation & 176 \\
+Horizons (regressors) & 26 \\
+Base trees per regressor & 400 \\
+Profile & Fast-refresh \\
+Objective & \texttt{reg:squarederror} \\
+Tree method & \texttt{hist} (GPU) \\
+GPU & NVIDIA H100 \\
+Training time (base) & 1{,}909 s ($\sim$32 min) \\
+Cluster & Compute Canada / DRAC \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Evaluation Metrics}
+
+Model performance is evaluated primarily using Root Mean Squared Error (RMSE) and Mean Absolute Error (MAE). RMSE is used as the main optimization and reporting metric because it penalizes larger prediction errors more strongly and is consistent with the squared-error objective used during XGBoost training. MAE is reported as a complementary measure. Directional accuracy assesses whether the predicted sign of the return matches the realized sign. For the warm-refresh simulation, step-level prediction distributions and directional shifts across the trading day provide additional operational insight.
+
+% ============================================================
+%  SECTION VII --- WARM-REFRESH SIMULATION
+% ============================================================
+\section{Warm-Refresh Simulation}\label{sec:warmrefresh}
+
+A central contribution of this work is the warm-refresh simulation framework, which demonstrates how the base model can be incrementally updated during a trading day as new intraday data arrives. This section describes the warm-start mechanism, the simulation protocol, and the results from a full-day replay on 2026-04-07.
+
+\subsection{Warm-Start Mechanism}
+
+XGBoost natively supports \emph{warm-start} training through the \texttt{xgb\_model} parameter, which allows new boosting rounds to be appended to an existing model checkpoint without retraining from scratch~\cite{chen2016xgboost}. The warm-refresh simulation exploits this capability: at each 15-minute step of the trading day, the base model is augmented with a small number of fresh trees trained on the most recent data, producing an incrementally updated ensemble that reflects the latest available market information.
+
+This approach is computationally inexpensive compared to full retraining, because only a small number of new trees are added at each step, and the existing base trees are not modified. The fresh trees are trained on a sliding window of recent observations (configurable; default 1~trading day of warm-refresh data), which focuses the new trees on the most current market dynamics.
+
+\subsection{Simulation Protocol}
+
+The simulation replays a single trading day (2026-04-07) by walking through all 26 regular-session time slots from 09:30 to 15:45~ET. At each step~$k$:
+
+\begin{enumerate}
+    \item The feature matrix is constructed using all information available up to and including the $k$th bar of the simulation day.
+    \item The base model (400 trees) is loaded and augmented with 30 fresh trees trained on the warm-refresh window.
+    \item All 26 horizon regressors generate predictions for the full 504-symbol universe.
+    \item The augmented model, predictions, and step metadata are persisted to the output directory.
+\end{enumerate}
+
+The ensemble therefore grows from 430 trees at step~0 (09:30) to 1{,}180 trees at step~25 (15:45), with 30 new trees added at each step ($400 + 26 \times 30 = 1{,}180$).
+
+\subsection{Simulation Results}
+
+Table~\ref{tab:simresults} summarises the timing and scale of the warm-refresh simulation.
+
+\begin{table}[h]
+\centering
+\caption{Warm-refresh simulation results on 2026-04-07.}
+\label{tab:simresults}
+\begin{tabular}{ll}
+\hline
+\textbf{Metric} & \textbf{Value} \\
+\hline
+Replay date & 2026-04-07 \\
+Steps completed & 26 (09:30--15:45 ET) \\
+Symbols per step & 504 \\
+Training rows per step & 13{,}104 \\
+Warm trees per step & 30 \\
+Base trees & 400 \\
+Final total trees (step 25) & 1{,}180 \\
+Feature build time (one-time) & 380 s \\
+Mean train time per step & 4.9 s \\
+Mean inference time per step & 1.0 s \\
+Mean total time per step & 5.9 s \\
+Total wall time (26 steps) & 554 s ($\sim$9.2 min) \\
+GPU & NVIDIA H100 (CUDA) \\
+\hline
+\end{tabular}
+\end{table}
+
+The per-step training time is remarkably stable, ranging from 4.2~s (step~3) to 5.8~s (step~0), because the warm-refresh training window remains fixed at 1~day and only 30 trees are fitted per step. Inference time increases modestly from 0.59~s at step~0 to 1.34~s at step~25, reflecting the growing ensemble size.
+
+The entire 26-step simulation, covering the full regular session for 504~equities, completes in approximately 554~seconds of wall time (including 380~s of one-time feature construction). The per-step latency of under 7~seconds per step is well within the 15-minute bar interval, confirming that the warm-refresh approach is operationally feasible for real-time deployment.
+
+\subsection{Prediction Analysis Across Steps}
+
+Table~\ref{tab:steppredictions} shows how the model's aggregate predictions evolve as it observes more of the trading day.
+
+\begin{table}[h]
+\centering
+\caption{Prediction distribution at selected simulation steps.}
+\label{tab:steppredictions}
+\begin{tabular}{lccccc}
+\hline
+\textbf{Step} & \textbf{Time} & \textbf{Up} & \textbf{Down} & \textbf{Mean ret.} & \textbf{Range} \\
+\hline
+0  & 09:30 & 226 & 278 & +0.02\% & $\pm$3.7\% \\
+12 & 12:30 & 192 & 312 & $-$0.09\% & $-$4.7\% / +8.5\% \\
+25 & 15:45 & 188 & 316 & $-$0.19\% & $-$4.3\% / +8.5\% \\
+\hline
+\end{tabular}
+\end{table}
+
+At market open (step~0), the model's directional split is relatively balanced (45\% up, 55\% down). As the day progresses, the proportion of bearish forecasts increases to 63\% by session close, and the mean predicted return shifts from approximately neutral to $-$0.19\%. This demonstrates that the warm-refreshed ensemble actively adapts its view as new intraday information is incorporated.
+
+The prediction range also widens from $\pm$3.7\% at step~0 to [$-$4.3\%, +8.5\%] at later steps, reflecting increased model confidence for individual names once more of the intraday pattern has been observed.
+
+% ============================================================
+%  SECTION VIII --- DISCUSSION
+% ============================================================
+\section{Discussion}\label{sec:discussion}
+
+The warm-refresh simulation provides several insights relevant to both the research and operational design of intraday forecasting systems.
+
+\textbf{Scalability.}
+The pipeline processes 504~equities across 26 intraday steps in under 10~minutes on a single H100 GPU, with each step completing in under 7~seconds. This is well within the 15-minute bar interval, confirming that the warm-start approach is operationally feasible for intraday deployment. The computational cost scales linearly with the number of warm trees per step, and the fixed base model avoids the cost of full retraining.
+
+\textbf{Adaptive predictions.}
+The step-wise prediction analysis shows that the warm-refreshed ensemble does not simply echo the base model's static forecast. As new bars are observed, the directional distribution shifts meaningfully---from a 55/45 down/up split at open to 63/37 by close---indicating that the warm trees are capturing same-day information that was unavailable to the base model. This adaptive behaviour is a key advantage of the warm-refresh design over a static overnight forecast.
+
+\textbf{Conservative hyperparameters.}
+The Optuna-selected hyperparameters are notably conservative: shallow trees (depth~4), a low learning rate (0.016), strong L2 regularization (3.98), and aggressive subsampling (85\% row, 74\% column). This is consistent with the low signal-to-noise ratio of short-horizon financial return prediction, where model complexity must be carefully controlled to avoid overfitting~\cite{gu2020empirical}.
+
+\textbf{Feature architecture.}
+The 176-dimensional cutoff-aware feature space is substantially more compact than typical slot-pivoted representations, which can exceed 500 features. By encoding session progress directly (bars seen, cutoff return, cumulative volume) rather than pivoting all 26 slot values into the feature vector, the architecture achieves a more parameter-efficient representation that generalises across time-of-day positions. This design also enables the same model to be used at any intraday cutoff, which is essential for the warm-refresh simulation.
+
+\textbf{Limitations.}
+Several limitations remain. First, the current production model is trained without cross-validation folds (\texttt{direct\_train} mode on the full dataset), so the reported training statistics do not include out-of-sample RMSE estimates; cross-validation is used only during hyperparameter selection. Second, the 26 horizons are modelled independently, so temporal dependencies across adjacent horizons are not learned directly. Third, the single-day simulation (2026-04-07) demonstrates operational feasibility and adaptive behaviour but does not provide a statistically reliable estimate of long-run prediction accuracy. Fourth, the feature set is manually engineered; automated feature selection or sequence-based models might discover additional signals.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{images/feature_importance_top25.png}
+    \caption{Top 25 features by mean gain for the XGBoost configuration. Cutoff-aware and rolling volatility features dominate the learned signal.}
+    \label{fig:feature_importance}
+\end{figure}
+
+% ============================================================
+%  SECTION IX --- CONCLUSION
+% ============================================================
+\section{Conclusion}\label{sec:conclusion}
+
+This paper presented an end-to-end machine learning pipeline for next-day intraday return path prediction using XGBoost on a 504-equity universe. The workflow integrates a pre-engineered market data table, 176-dimensional cutoff-aware feature construction, GPU-accelerated training on NVIDIA H100 GPUs, and automated hyperparameter optimisation on DRAC infrastructure. Rather than predicting a single end-of-day return, the system forecasts the full next regular-session path as 26 independent 15-minute log-return targets from a bar-level observation model.
+
+The deployed base model uses 400 boosted trees trained with a fast-refresh profile on approximately 4.77~million bar-level observations across 504~equities. A warm-refresh simulation on 2026-04-07 demonstrated that the base model can be incrementally augmented with 30 fresh trees at each of 26 intraday time steps, growing the ensemble to 1{,}180 trees, with each step completing in under 7~seconds. The simulation showed that the warm-refreshed ensemble adapts its predictions as new intraday data arrives, with directional forecasts shifting meaningfully across the session. The entire 26-step simulation for 504~symbols completes in approximately 9~minutes on a single H100 GPU.
+
+The main contribution of this work is the integration of a scalable and reproducible forecasting framework that connects research data infrastructure with multi-horizon intraday machine learning and an operationally feasible warm-refresh mechanism for real-time ensemble adaptation.
+
+% ============================================================
+%  SECTION X --- FUTURE WORK
+% ============================================================
+\section{Future Work}\label{sec:futurework}
+
+Several directions are planned for extending this work.
+
+First, the warm-refresh simulation will be evaluated over a multi-day window of 50--100~consecutive trading sessions to produce statistically meaningful accuracy metrics, including path RMSE, horizon-wise directional accuracy, the information coefficient, and long--short portfolio returns~\cite{lopezdeprado2018afml}.
+
+Second, the current evaluation design will be improved by running a formal expanding-window cross-validation on the bar-level architecture with the full 504-equity dataset, providing out-of-sample RMSE and MAE estimates that are directly comparable to the production model.
+
+Third, alternative loss functions will be explored. The current squared-error objective produces path forecasts that approximate the conditional mean, which is a poor target for heavy-tailed distributions. Weighted-horizon losses that emphasise early-session horizons and asymmetric loss functions that penalise directional misses more heavily could improve operational usefulness~\cite{tsay2010financial}.
+
+Fourth, the equity universe will be expanded beyond the current S\&P-scale coverage to test whether the learned signal generalises to mid-cap and small-cap names with different liquidity profiles.
+
+Fifth, alternative model architectures will be evaluated. Temporal convolutional networks and transformer-based models can natively capture sequential dependencies across the 26 horizons, potentially outperforming the current independent-regressor approach where cross-horizon structure is ignored~\cite{lim2021time, fischer2018deep}.
+
+Sixth, the warm-refresh framework will be extended with a formal base-versus-warm comparison, measuring at each intraday step whether the warm-refreshed ensemble outperforms the static base model, and identifying the session points at which the additional trees provide the greatest predictive lift.
+
+This work is a continuation of the previous research projects described in~\cite{Khmelevsky2010Cloud, Khmelevsky2011IntCollab, Khmelvesky2011ResTeaching, Khmelevsky2013Mobile, Khmelevsky2015hybrid, 2015HainsCodeGenUML, Khmelevsky2016TenYears, Khmelevsky2016sport, Khmelevsky2016biometric, Khmelevsky2017Bot, Khmelevsky2017gaming, 2020HainsGamersNetPerf, Khmelevsky2020ML, Wong2021Gamers}.
+
+\section*{Acknowledgements}
+We thank Okanagan College and the Okanagan College's (OC's) Grants-in-Aid (GIA) Committee for funding and financial support of the applied student research projects. Additionally, we would like to thank the DRA of Canada for the DRI Champions Award.
+
+The authors used an AI-based language tool to assist with documentation organization, grammar refinement, and clarification of written content. The AI tool did not contribute to the research design, methodology, experiments, analysis, or conclusions. All intellectual contributions and technical decisions are solely those of the authors.
+
+\balance
+
+\bibliographystyle{IEEEtran}
+\bibliography{AlgTr,Youry,TempBib,2026-AlgTr}
+
+\end{document}

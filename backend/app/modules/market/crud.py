@@ -1,4 +1,8 @@
-"""Market module database queries against the dw warehouse schema."""
+"""Market module database queries.
+
+Stock metadata is sourced from market.stocks (seeded via scripts/seed_market.py).
+OHLC data is sourced from ml.market_data_15m (the live engineered feature table).
+"""
 
 from dataclasses import dataclass
 from datetime import date
@@ -6,21 +10,6 @@ from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-
-STOCK_METADATA_QUERY = text(
-    """
-    SELECT
-        i.symbol AS symbol,
-        COALESCE(c.company_name, i.name, i.symbol) AS name,
-        c.sector AS sector,
-        c.industry AS industry,
-        NULL AS exchange
-    FROM dw.dim_instrument i
-    LEFT JOIN dw.dim_company c
-      ON c.symbol = i.symbol
-    WHERE i.instrument_type = 'stock'
-    """
-)
 
 
 @dataclass
@@ -33,20 +22,21 @@ class StockRecord:
 
 
 def get_active_stocks(session: Session) -> list[StockRecord]:
-    """Return all active stocks from the warehouse dimensions, ordered by symbol."""
+    """Return all active stocks from market.stocks, ordered by symbol."""
     rows = session.execute(
         text(
-            f"""
-            {STOCK_METADATA_QUERY.text}
-            AND COALESCE(c.is_active, TRUE) IS TRUE
-            ORDER BY i.symbol
+            """
+            SELECT symbol, name, sector, industry, exchange
+            FROM market.stocks
+            WHERE is_active = TRUE
+            ORDER BY symbol
             """
         )
     ).fetchall()
     return [
         StockRecord(
             symbol=row.symbol,
-            name=row.name,
+            name=row.name or row.symbol,
             sector=row.sector,
             industry=row.industry,
             exchange=row.exchange,
@@ -56,13 +46,13 @@ def get_active_stocks(session: Session) -> list[StockRecord]:
 
 
 def get_stock(session: Session, symbol: str) -> StockRecord | None:
-    """Return a single stock by symbol, or None."""
+    """Return a single stock by symbol from market.stocks, or None."""
     row = session.execute(
         text(
-            f"""
-            {STOCK_METADATA_QUERY.text}
-            AND i.symbol = :symbol
-            ORDER BY i.symbol
+            """
+            SELECT symbol, name, sector, industry, exchange
+            FROM market.stocks
+            WHERE symbol = :symbol
             LIMIT 1
             """
         ),
@@ -72,7 +62,7 @@ def get_stock(session: Session, symbol: str) -> StockRecord | None:
         return None
     return StockRecord(
         symbol=row.symbol,
-        name=row.name,
+        name=row.name or row.symbol,
         sector=row.sector,
         industry=row.industry,
         exchange=row.exchange,
@@ -117,13 +107,11 @@ def get_coverage(session: Session, symbol: str) -> dict[str, Any]:
         text(
             """
             SELECT
-                MIN(d.date)::date,
-                MAX(d.date)::date,
+                MIN(trade_date)::date,
+                MAX(trade_date)::date,
                 COUNT(*)
-            FROM dw.fact_15min_stock_price f
-            JOIN dw.dim_date d ON f.fk_date_id = d.sk_date_id
-            JOIN dw.dim_instrument i ON f.fk_instrument_id = i.sk_instrument_id
-            WHERE i.symbol = :symbol
+            FROM ml.market_data_15m
+            WHERE symbol = :symbol
             """
         ),
         {"symbol": symbol.upper()},
@@ -237,27 +225,22 @@ def get_recent_inference_bars(
 
 def get_ohlc(session: Session, symbol: str, days: int = 365) -> list[Any]:
     """
-    Return recent OHLC data for a symbol, oldest first.
+    Return recent 15-min OHLC data for a symbol from ml.market_data_15m, oldest first.
 
-    Fetches the latest `days * 26` 15-min bars regardless of wall-clock date,
-    so stale datasets still return data.
+    Fetches the latest `days * 26` bars regardless of wall-clock date so stale
+    datasets still return data.
     """
     results = session.execute(
         text(
             """
-            SELECT date, open, high, low, close, volume FROM (
-                SELECT
-                    d.datetime AS date,
-                    f.open_price::numeric AS open,
-                    f.high_price::numeric AS high,
-                    f.low_price::numeric AS low,
-                    f.close_price::numeric AS close,
-                    f.volume::numeric AS volume
-                FROM dw.fact_15min_stock_price f
-                JOIN dw.dim_date d ON f.fk_date_id = d.sk_date_id
-                JOIN dw.dim_instrument i ON f.fk_instrument_id = i.sk_instrument_id
-                WHERE i.symbol = :symbol
-                ORDER BY d.datetime DESC
+            SELECT window_ts AS date,
+                   open::numeric, high::numeric, low::numeric,
+                   close::numeric, volume
+            FROM (
+                SELECT window_ts, open, high, low, close, volume
+                FROM ml.market_data_15m
+                WHERE symbol = :symbol
+                ORDER BY window_ts DESC
                 LIMIT :limit
             ) sub
             ORDER BY date ASC

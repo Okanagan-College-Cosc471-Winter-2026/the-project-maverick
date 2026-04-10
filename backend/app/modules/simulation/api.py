@@ -1,14 +1,14 @@
 """
 Simulation API endpoints.
 
-Provides a replay/demo mode for 2026-03-23 using pre-computed model artifacts.
+Provides a replay/demo mode for 2026-04-07 using pre-computed model artifacts.
 
 Endpoints:
   GET /simulation/session
       → session metadata (step count, timestamps, tree counts)
 
   GET /simulation/base/{symbol}
-      → full 26-bar prediction from base model (trained through 2026-03-20)
+      → full 26-bar prediction from base model (trained through 2026-04-06)
          implemented as step_00 predictions (1,157 trees, no warm-refresh)
 
   GET /simulation/step/{symbol}/{step}
@@ -29,6 +29,16 @@ from app.modules.simulation.service import SimulationService
 router = APIRouter(prefix="/simulation", tags=["simulation"])
 
 
+@router.get("/symbols", response_model=list[str])
+def get_simulation_symbols() -> list[str]:
+    """
+    Return the list of symbols available in the simulation (sourced from the loaded prediction CSVs).
+    Used by the frontend to populate the simulation asset selector.
+    """
+    from app.modules.simulation.loader import simulation_loader
+    return simulation_loader.available_symbols()
+
+
 @router.get("/session", response_model=SimSessionInfo)
 def get_session_info() -> SimSessionInfo:
     """
@@ -41,10 +51,10 @@ def get_session_info() -> SimSessionInfo:
 @router.get("/base/{symbol}", response_model=SimBaseResponse)
 def get_base_prediction(symbol: str) -> SimBaseResponse:
     """
-    Full-day 26-bar prediction for a symbol using the base model (trained through 2026-03-20).
+    Full-day 26-bar prediction for a symbol using the base model (trained through 2026-04-06).
 
     This uses step_00 of the warm-refresh replay (base 1,157 trees only — no warm refresh
-    applied yet), which is equivalent to running the base model cold on 2026-03-23 open data.
+    applied yet), which is equivalent to running the base model cold on 2026-04-07 open data.
 
     Args:
         symbol: Stock symbol (e.g. 'AAPL', 'MSFT', 'NVDA')
@@ -89,9 +99,9 @@ def get_step_prediction(symbol: str, step: int) -> SimStepResponse:
 @router.get("/history/{symbol}", response_model=list[dict])
 def get_simulation_history(symbol: str, session: SessionDep) -> list[dict]:
     """
-    Return 15-min close prices for the 5 trading days leading up to and including
-    the simulation date (2026-03-17 → 2026-03-23), regular session only.
-    Used to show the week-in-context line chart.
+    Return full 15-min OHLC bars for the 5 trading days leading up to and including
+    the simulation date (2026-03-31 → 2026-04-07), regular session only.
+    Used to render the week-in-context candlestick chart.
     """
     from sqlalchemy import text
 
@@ -101,10 +111,14 @@ def get_simulation_history(symbol: str, session: SessionDep) -> list[dict]:
             SELECT
                 window_ts,
                 trade_date::text AS trade_date,
-                close::float
+                open::float,
+                high::float,
+                low::float,
+                close::float,
+                volume::bigint
             FROM ml.market_data_15m
             WHERE symbol = :symbol
-              AND trade_date BETWEEN '2026-03-17' AND '2026-03-23'
+              AND trade_date BETWEEN '2026-03-31' AND '2026-04-07'
               AND window_ts AT TIME ZONE 'America/New_York' >= trade_date + TIME '09:30'
               AND window_ts AT TIME ZONE 'America/New_York' <= trade_date + TIME '15:45'
             ORDER BY window_ts ASC
@@ -117,7 +131,11 @@ def get_simulation_history(symbol: str, session: SessionDep) -> list[dict]:
         {
             "time": int(r.window_ts.timestamp()),
             "trade_date": r.trade_date,
+            "open": r.open,
+            "high": r.high,
+            "low": r.low,
             "close": r.close,
+            "volume": r.volume,
         }
         for r in rows
     ]
@@ -128,7 +146,7 @@ def get_simulation_ohlc(
     symbol: str, session: SessionDep
 ) -> list[dict]:
     """
-    Fetch real 15-min OHLC bars from ml.market_data_15m for the simulation date (2026-03-23),
+    Fetch real 15-min OHLC bars from ml.market_data_15m for the simulation date (2026-04-07),
     regular session only (09:30–15:45 ET = 13:30–19:45 UTC).
     """
     from sqlalchemy import text
@@ -145,9 +163,9 @@ def get_simulation_ohlc(
                 volume::bigint
             FROM ml.market_data_15m
             WHERE symbol = :symbol
-              AND trade_date = '2026-03-23'
-              AND window_ts AT TIME ZONE 'America/New_York' >= '2026-03-23 09:30:00'
-              AND window_ts AT TIME ZONE 'America/New_York' <= '2026-03-23 15:45:00'
+              AND trade_date = '2026-04-07'
+              AND window_ts AT TIME ZONE 'America/New_York' >= '2026-04-07 09:30:00'
+              AND window_ts AT TIME ZONE 'America/New_York' <= '2026-04-07 15:45:00'
             ORDER BY window_ts ASC
             """
         ),

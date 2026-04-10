@@ -21,6 +21,7 @@ from api import (
     sim_ohlc,
     sim_session,
     sim_step,
+    sim_symbols,
 )
 
 st.set_page_config(
@@ -70,6 +71,10 @@ def load_snapshots() -> dict:
     return list_snapshots()
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def load_sim_symbols() -> list[str]:
+    return sim_symbols()
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_sim_session() -> dict:
     return sim_session()
 
@@ -84,6 +89,10 @@ def load_sim_step(symbol: str, step: int) -> dict:
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_sim_history(symbol: str) -> list[dict]:
     return sim_history(symbol)
+
+@st.cache_data(ttl=60, show_spinner=False)
+def load_sim_ohlc(symbol: str) -> list[dict]:
+    return sim_ohlc(symbol)
 
 
 # ── Data helpers ──────────────────────────────────────────────────────────────
@@ -108,54 +117,77 @@ def ohlc_df(symbol: str, days: int) -> pd.DataFrame:
 
 # ── Chart builders ────────────────────────────────────────────────────────────
 
-def candlestick_chart(df: pd.DataFrame, title: str, prediction: dict | None = None) -> go.Figure:
+def build_price_chart(df: pd.DataFrame, title: str, prediction: dict | None = None) -> go.Figure:
+    """Candlestick + volume chart. Prediction path overlaid as dotted amber line."""
     fig = go.Figure()
+
+    # Separate history from prediction date
+    pred_date_str = (prediction or {}).get("prediction_date", "")[:10]
+    hist = df[df["date"].dt.date.astype(str) < pred_date_str] if pred_date_str else df
+
+    # Candlestick
     fig.add_trace(go.Candlestick(
-        x=df["date"], open=df["open"], high=df["high"],
-        low=df["low"], close=df["close"], name="OHLC",
+        x=hist["date"],
+        open=hist["open"], high=hist["high"],
+        low=hist["low"],   close=hist["close"],
+        name="OHLC",
         increasing_line_color="#0f766e", decreasing_line_color="#b91c1c",
-        increasing_fillcolor="#14b8a6", decreasing_fillcolor="#ef4444",
+        increasing_fillcolor="#14b8a6",  decreasing_fillcolor="#ef4444",
     ))
+
+    # Volume bars on secondary Y axis
     fig.add_trace(go.Bar(
-        x=df["date"], y=df["volume"], name="Volume",
-        marker_color="#94a3b8", opacity=0.18, yaxis="y2",
+        x=hist["date"], y=hist["volume"],
+        name="Volume", marker_color="#94a3b8",
+        opacity=0.18, yaxis="y2",
     ))
+
+    # Prediction path
     if prediction:
         path = prediction.get("path", [])
-        if path:
-            pred_date = prediction.get("prediction_date", "")[:10]
-            px_ = [f"{pred_date} {b['bar_time']}:00" for b in path]
-            py_ = [b["pred_close"] for b in path]
+        if path and pred_date_str:
+            path_x = [f"{pred_date_str} {b['bar_time']}:00" for b in path]
+            path_y = [b["pred_close"] for b in path]
             fig.add_trace(go.Scatter(
-                x=px_, y=py_, mode="lines+markers", name="Predicted Path",
+                x=path_x, y=path_y,
+                mode="lines+markers", name="Predicted Path",
                 line={"color": "#f59e0b", "width": 2, "dash": "dot"},
                 marker={"size": 4, "color": "#f59e0b"},
             ))
+            end_price = path_y[-1]
             fig.add_annotation(
-                x=px_[-1], y=py_[-1],
-                text=f"EOD ${py_[-1]:.2f}", showarrow=True, arrowhead=2,
-                ax=32, ay=-40, bgcolor="rgba(245,158,11,0.12)",
-                bordercolor="#f59e0b", font={"size": 11, "color": "#92400e"},
+                x=path_x[-1], y=end_price,
+                text=f"Pred EOD ${end_price:.2f}",
+                showarrow=True, arrowhead=2, ax=32, ay=-40,
+                bgcolor="rgba(245,158,11,0.12)", bordercolor="#f59e0b",
+                font={"size": 11, "color": "#92400e"},
             )
+
+    latest_close = float(hist["close"].iloc[-1]) if not hist.empty else 0
     fig.update_layout(
         title=title, template="plotly_white",
         paper_bgcolor="white", plot_bgcolor="#fcfcfd",
         xaxis_title=None, yaxis_title="Price",
-        yaxis2={"title": "Vol", "overlaying": "y", "side": "right", "showgrid": False},
+        yaxis2={"title": "Volume", "overlaying": "y", "side": "right", "showgrid": False},
         legend={"orientation": "h", "y": 1.02, "x": 1, "xanchor": "right"},
-        margin={"l": 16, "r": 16, "t": 44, "b": 8},
+        margin={"l": 20, "r": 20, "t": 50, "b": 20},
         height=CHART_H, hovermode="x unified", dragmode="pan",
     )
     fig.update_xaxes(
-        showgrid=False, rangeslider_visible=False,
-        rangebreaks=[dict(bounds=["sat", "mon"]), dict(bounds=[16, 9.5], pattern="hour")],
+        showgrid=False,
+        rangeslider_visible=False,
+        type="category",
+        tickformat="%b %d %H:%M",
+        nticks=20,
+        tickangle=-45,
     )
     fig.update_yaxes(showgrid=True, gridcolor="rgba(148,163,184,0.15)")
-    fig.add_hline(y=float(df["close"].iloc[-1]), line_width=1, line_dash="dot", line_color="#94a3b8")
+    if latest_close:
+        fig.add_hline(y=latest_close, line_width=1, line_dash="dot", line_color="#94a3b8")
     return fig
 
 
-def sim_chart(
+def build_sim_chart(
     hist_df: pd.DataFrame,
     pred_active: dict,
     anchor_close: float | None,
@@ -164,88 +196,104 @@ def sim_chart(
     step_label: str | None,
     base_trees: int,
     total_trees: int,
+    replay_date: str = "2026-04-07",
+    ohlc_df: pd.DataFrame | None = None,
 ) -> go.Figure:
+    """Simulation chart: 5-day history + Apr-7 actual + prediction path."""
+    pre_sim = hist_df[hist_df["trade_date"] < replay_date]
+    on_sim  = hist_df[hist_df["trade_date"] == replay_date]
+    live_ohlc = ohlc_df if (ohlc_df is not None and not ohlc_df.empty) else None
+    sim_df    = live_ohlc if live_ohlc is not None else on_sim
+    sim_dates = sim_df["date"].reset_index(drop=True)
+    sim_close = sim_df["close"].reset_index(drop=True)
+
     fig = go.Figure()
-    pre23 = hist_df[hist_df["trade_date"] < "2026-03-23"]
-    on23  = hist_df[hist_df["trade_date"] == "2026-03-23"]
 
-    fig.add_trace(go.Scatter(
-        x=pre23["date"], y=pre23["close"], mode="lines",
-        name="Historical", line={"color": "#64748b", "width": 2},
-    ))
+    # Trace 1: Historical close (gray)
+    if not pre_sim.empty:
+        fig.add_trace(go.Scatter(
+            x=pre_sim["date"], y=pre_sim["close"],
+            mode="lines", name="Historical Close (DB)",
+            line={"color": "#64748b", "width": 2},
+        ))
 
-    if not on23.empty:
-        if len(pre23):
-            fig.add_trace(go.Scatter(
-                x=[pre23["date"].iloc[-1], on23["date"].iloc[0]],
-                y=[pre23["close"].iloc[-1], on23["close"].iloc[0]],
-                mode="lines", showlegend=False,
-                line={"color": "#0ea5e9", "width": 2},
-            ))
+    # Trace 2 & 3: Apr-7 actual bars
+    if not sim_df.empty:
         if is_warm:
-            obs = on23.iloc[: current_step + 1]
+            obs  = sim_df.iloc[:current_step + 1]
+            rest = sim_df.iloc[current_step + 1:]
             fig.add_trace(go.Scatter(
-                x=obs["date"], y=obs["close"], mode="lines",
-                name=f"Observed (→{step_label})",
+                x=obs["date"], y=obs["close"],
+                mode="lines", name=f"Apr 7 observed (→ {step_label})",
                 line={"color": "#0ea5e9", "width": 2},
             ))
-            rest = on23.iloc[current_step:]
-            if len(rest) > 1:
+            if not rest.empty:
                 fig.add_trace(go.Scatter(
-                    x=rest["date"], y=rest["close"], mode="lines",
-                    name="Actual (not seen yet)",
+                    x=rest["date"], y=rest["close"],
+                    mode="lines", name="Apr 7 actual (not yet seen)",
                     line={"color": "#38bdf8", "width": 2, "dash": "dashdot"},
-                    opacity=0.55,
+                    opacity=0.6,
                 ))
         else:
             fig.add_trace(go.Scatter(
-                x=on23["date"], y=on23["close"], mode="lines",
-                name="Mar 23 Actual", line={"color": "#0ea5e9", "width": 2},
+                x=sim_df["date"], y=sim_df["close"],
+                mode="lines", name="Apr 7 actual (DB)",
+                line={"color": "#0ea5e9", "width": 2},
             ))
 
+    # Trace 4: Prediction path (amber dotted)
     bars = pred_active.get("bars", [])
-    if bars and not on23.empty:
+    if bars and not sim_df.empty:
         if is_warm:
-            actual_at_step = float(on23["close"].iloc[current_step])
-            base_log = bars[current_step]["pred_log_return"]
-            fwd = bars[current_step:]
-            fwd_xs = [on23["date"].iloc[current_step + i] for i in range(len(fwd)) if current_step + i < len(on23)]
-            fwd_ys = [round(actual_at_step * math.exp(b["pred_log_return"] - base_log), 4) for b in fwd[:len(fwd_xs)]]
-            fig.add_trace(go.Scatter(
-                x=fwd_xs, y=fwd_ys, mode="lines+markers",
-                name=f"Warm Prediction @ {step_label} ({total_trees:,} trees)",
-                line={"color": "#f59e0b", "width": 2.5, "dash": "dot"},
-                marker={"size": 4, "color": "#f59e0b"},
-            ))
+            actual_at_step = float(sim_close.iloc[current_step]) if current_step < len(sim_close) else None
+            if actual_at_step is not None:
+                base_log = bars[current_step]["pred_log_return"]
+                fwd_bars = bars[current_step:]
+                fwd_xs = [sim_dates.iloc[current_step + i]
+                          for i in range(len(fwd_bars))
+                          if current_step + i < len(sim_dates)]
+                fwd_ys = [
+                    round(actual_at_step * math.exp(b["pred_log_return"] - base_log), 4)
+                    for b in fwd_bars[:len(fwd_xs)]
+                ]
+                fig.add_trace(go.Scatter(
+                    x=fwd_xs, y=fwd_ys,
+                    mode="lines+markers",
+                    name=f"Warm Prediction @ {step_label} ({total_trees:,} trees)",
+                    line={"color": "#f59e0b", "width": 2.5, "dash": "dot"},
+                    marker={"size": 4, "color": "#f59e0b"},
+                ))
         elif anchor_close:
-            xs = [on23["date"].iloc[i] for i in range(len(bars)) if i < len(on23)]
-            ys = [round(anchor_close * math.exp(b["pred_log_return"]), 4) for b in bars[:len(xs)]]
+            pred_xs = [sim_dates.iloc[i] for i in range(len(bars)) if i < len(sim_dates)]
+            pred_ys = [round(anchor_close * math.exp(b["pred_log_return"]), 4)
+                       for b in bars[:len(pred_xs)]]
             fig.add_trace(go.Scatter(
-                x=xs, y=ys, mode="lines+markers",
+                x=pred_xs, y=pred_ys,
+                mode="lines+markers",
                 name=f"Base Prediction ({base_trees:,} trees)",
                 line={"color": "#f59e0b", "width": 2.5, "dash": "dot"},
                 marker={"size": 4, "color": "#f59e0b"},
             ))
 
-    if not on23.empty:
-        vx = on23["date"].iloc[0].strftime("%Y-%m-%d %H:%M:%S")
-        fig.add_shape(
-            type="line", x0=vx, x1=vx, y0=0, y1=1, xref="x", yref="paper",
-            line={"dash": "dash", "color": "#94a3b8", "width": 1},
-        )
-
     fig.update_layout(
         template="plotly_white", paper_bgcolor="white", plot_bgcolor="#fcfcfd",
-        yaxis_title="Price (USD)", xaxis_title=None,
+        xaxis_title=None, yaxis_title="Price (USD)",
+        legend={"orientation": "h", "y": 1.02, "x": 1, "xanchor": "right"},
+        margin={"l": 20, "r": 20, "t": 40, "b": 20},
         height=CHART_H, hovermode="x unified", dragmode="pan",
-        legend={"orientation": "h", "y": 1.03, "x": 1, "xanchor": "right"},
-        margin={"l": 16, "r": 16, "t": 30, "b": 8},
-        xaxis=dict(
-            showgrid=False, rangeslider_visible=False,
-            rangebreaks=[dict(bounds=["sat", "mon"]), dict(bounds=[20, 13.5], pattern="hour")],
-        ),
     )
+    fig.update_xaxes(
+        showgrid=False,
+        rangeslider_visible=False,
+        type="category",
+        tickformat="%b %d %H:%M",
+        nticks=20,
+        tickangle=-45,
+    )
+    fig.update_yaxes(showgrid=True, gridcolor="rgba(148,163,184,0.15)")
     return fig
+
+
 
 
 # ── Page fragments (only these rerun on widget change inside them) ─────────────
@@ -278,10 +326,8 @@ def stocks_chart_fragment(symbol: str, days: int, detail: dict) -> None:
     if df.empty:
         st.warning("No OHLC data available for this symbol.")
         return
-    st.plotly_chart(
-        candlestick_chart(df, f"{detail.get('name', symbol)} ({symbol})", prediction),
-        use_container_width=True,
-    )
+    fig = build_price_chart(df, f"{detail.get('name', symbol)} ({symbol})", prediction)
+    st.plotly_chart(fig, use_container_width=True)
 
     info_tab, data_tab = st.tabs(["Summary", "Raw Data"])
     with info_tab:
@@ -313,6 +359,7 @@ def sim_fragment(
     session_info: dict,
     anchor_close: float | None,
     actual_ret: float | None,
+    ohlc_df: pd.DataFrame | None = None,
 ) -> None:
     """Slider + chart in one fragment — dragging never scrolls the page."""
     step_labels: list[str] = session_info.get("step_labels", [])
@@ -321,6 +368,7 @@ def sim_fragment(
     warm_per_step: int = session_info.get("warm_trees_per_step", 30)
 
     is_warm = st.session_state.get("sim_mode") == "Warm-Refresh Simulation"
+    # note: "Base Model (Apr 6 → Apr 7)" is the non-warm option; any non-warm value lands here
 
     pred_active = pred_base
     current_step = 0
@@ -343,22 +391,27 @@ def sim_fragment(
                 st.error(str(exc))
                 return
 
+    replay_date = session_info.get("replay_date", "—")
+    eff_date = session_info.get("effective_as_of_date", "—")
+
     # Metrics
     full_ret = pred_active.get("predicted_full_day_return", 0.0)
     direction = pred_active.get("predicted_direction", "—")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Base Trained", "2026-03-20")
-    c2.metric("Target Date", "2026-03-23")
+    c1.metric("Base Trained", eff_date)
+    c2.metric("Target Date", replay_date)
     c3.metric("Predicted Return", f"{full_ret:+.4f}%")
     c4.metric("Direction", direction.upper())
     if actual_ret is not None:
         label = f"step {current_step} ({step_label}), {total_trees:,} trees" if is_warm else f"base, {base_trees:,} trees"
-        st.caption(f"Actual Mar 23: **{actual_ret:+.2f}%** | Model ({label}): **{full_ret:+.4f}%**")
+        st.caption(f"Actual {replay_date}: **{actual_ret:+.2f}%** | Model ({label}): **{full_ret:+.4f}%**")
 
     # Chart
-    fig = sim_chart(
+    fig = build_sim_chart(
         hist_df, pred_active, anchor_close, is_warm,
         current_step, step_label, base_trees, total_trees,
+        replay_date=replay_date,
+        ohlc_df=ohlc_df,
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -387,8 +440,9 @@ def render_overview(stocks: list[dict]) -> None:
     left, right = st.columns([1.4, 1])
     with left:
         st.markdown("#### Coverage")
+        available_cols = [c for c in ["symbol","name","sector","exchange"] if c in df.columns]
         st.dataframe(
-            df[["symbol","name","sector","exchange"]],
+            df[available_cols] if available_cols else df,
             use_container_width=True, hide_index=True, height=460,
             column_config={
                 "symbol": st.column_config.TextColumn("Symbol", width="small"),
@@ -453,10 +507,15 @@ def render_predictions(stocks: list[dict], symbol: str) -> None:
 
         df = ohlc_df(symbol, 365)
         if not df.empty:
-            st.plotly_chart(
-                candlestick_chart(df, f"{symbol} — Predicted Path", payload),
-                use_container_width=True,
-            )
+            st.markdown(f"#### {symbol} — Predicted Path")
+            price_df, vol_df = chart_data(df, prediction=payload)
+            cc1, cc2 = st.columns(2)
+            with cc1:
+                st.markdown("**Price**")
+                st.line_chart(price_df, height=CHART_H)
+            with cc2:
+                st.markdown("**Volume**")
+                st.bar_chart(vol_df, height=CHART_H)
         st.caption(f"26-bar 15-min path for {payload['prediction_date'][:10]}.")
 
 
@@ -467,6 +526,9 @@ def render_simulation(stocks: list[dict], symbol: str) -> None:
         st.error(f"Could not load session info: {exc}")
         return
 
+    replay_date = session_info.get("replay_date", "")
+    eff_date = session_info.get("effective_as_of_date", "")
+
     try:
         hist_raw = load_sim_history(symbol)
         hist = pd.DataFrame(hist_raw)
@@ -476,13 +538,25 @@ def render_simulation(stocks: list[dict], symbol: str) -> None:
         st.error(f"Could not load history: {exc}")
         return
 
-    mar20 = hist[hist["trade_date"] == "2026-03-20"]
-    anchor_close = float(mar20["close"].iloc[-1]) if not mar20.empty else None
+    # anchor = last bar of the training cutoff day (effective_as_of_date from base metadata)
+    anchor_rows = hist[hist["trade_date"] == eff_date] if eff_date else pd.DataFrame()
+    anchor_close = float(anchor_rows["close"].iloc[-1]) if not anchor_rows.empty else None
 
-    mar23 = hist[hist["trade_date"] == "2026-03-23"]
+    # actual return on the simulation day (open→close)
+    sim_day = hist[hist["trade_date"] == replay_date] if replay_date else pd.DataFrame()
     actual_ret = None
-    if not mar23.empty:
-        actual_ret = (float(mar23["close"].iloc[-1]) / float(mar23["close"].iloc[0]) - 1) * 100
+    if not sim_day.empty:
+        actual_ret = (float(sim_day["close"].iloc[-1]) / float(sim_day["close"].iloc[0]) - 1) * 100
+
+    # Live OHLC from DB for the simulation day (real candlestick bars)
+    try:
+        ohlc_raw = load_sim_ohlc(symbol)
+        ohlc = pd.DataFrame(ohlc_raw)
+        if not ohlc.empty:
+            ohlc["date"] = pd.to_datetime(ohlc["time"], unit="s", utc=True)
+            ohlc = ohlc.sort_values("date").reset_index(drop=True)
+    except ApiError:
+        ohlc = pd.DataFrame()
 
     try:
         pred_base = load_sim_base(symbol)
@@ -491,7 +565,7 @@ def render_simulation(stocks: list[dict], symbol: str) -> None:
         return
 
     # Fragment owns the slider + chart — no full-page reruns when dragging
-    sim_fragment(symbol, hist, pred_base, session_info, anchor_close, actual_ret)
+    sim_fragment(symbol, hist, pred_base, session_info, anchor_close, actual_ret, ohlc)
 
 
 def render_snapshots() -> None:
@@ -552,7 +626,7 @@ def render_snapshots() -> None:
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 
-def build_sidebar(stocks: list[dict]) -> tuple[str, str, int]:
+def build_sidebar(stocks: list[dict]) -> tuple[str, str, int, str]:
     with st.sidebar:
         st.markdown(
             """
@@ -579,6 +653,8 @@ def build_sidebar(stocks: list[dict]) -> tuple[str, str, int]:
         symbols = df["symbol"].tolist() if not df.empty else []
         symbol = symbols[0] if symbols else ""
         days = 30
+
+
 
         if page in ("Stocks", "Predictions"):
             st.markdown("**Controls**")
@@ -616,14 +692,18 @@ def build_sidebar(stocks: list[dict]) -> tuple[str, str, int]:
                 )
 
         elif page == "Simulation":
-            st.markdown("**Simulation — 2026-03-23**")
-            default_sym = "AAPL" if "AAPL" in symbols else (symbols[0] if symbols else "")
-            symbol = st.selectbox("Asset", symbols,
-                index=symbols.index(default_sym) if default_sym in symbols else 0,
-                key="sim_symbol")
+            st.markdown("**Simulation — 2026-04-07**")
+            try:
+                sim_syms = load_sim_symbols()
+            except Exception:
+                sim_syms = symbols  # fall back to market symbols if endpoint unavailable
+            default_sym = "AAPL" if "AAPL" in sim_syms else (sim_syms[0] if sim_syms else "")
+            symbol = st.selectbox("Asset", sim_syms,
+                index=sim_syms.index(default_sym) if default_sym in sim_syms else 0,
+                key="sim_symbol") if sim_syms else ""
             st.radio(
                 "Mode",
-                ["Base Model (Mar 20 → Mar 23)", "Warm-Refresh Simulation"],
+                ["Base Model (Apr 6 → Apr 7)", "Warm-Refresh Simulation"],
                 key="sim_mode",
             )
             # Step slider lives inside the fragment (main area) so dragging it

@@ -76,6 +76,11 @@ def download_snapshot(filename: str) -> io.BytesIO:
 # Simulation / replay endpoints
 # ---------------------------------------------------------------------------
 
+def sim_symbols() -> list[str]:
+    """Return the list of symbols available in the simulation loader."""
+    return _request("GET", "/simulation/symbols")
+
+
 def sim_session() -> dict[str, Any]:
     """Return replay session metadata (step count, labels, tree info)."""
     return _request("GET", "/simulation/session")
@@ -97,7 +102,7 @@ def sim_history(symbol: str) -> list[dict[str, Any]]:
 
 
 def sim_ohlc(symbol: str) -> list[dict[str, Any]]:
-    """Fetch real 15-min OHLC bars specifically for the 2026-03-23 simulation day."""
+    """Fetch real 15-min OHLC bars specifically for the 2026-04-07 simulation day."""
     return _request("GET", f"/simulation/ohlc/{symbol.upper()}")
 
 

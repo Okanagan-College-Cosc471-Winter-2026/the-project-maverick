@@ -392,7 +392,8 @@ def resolve_requested_as_of(engine, args: argparse.Namespace) -> pd.Timestamp:
 def clip_bars_to_requested_as_of(bars: pd.DataFrame, requested_as_of: pd.Timestamp) -> pd.DataFrame:
     if bars.empty:
         return bars.copy()
-    clipped = bars[pd.to_datetime(bars["window_ts"], errors="coerce") <= requested_as_of].copy()
+    ts = requested_as_of if requested_as_of.tzinfo is not None else requested_as_of.tz_localize("UTC")
+    clipped = bars[pd.to_datetime(bars["window_ts"], errors="coerce") <= ts].copy()
     return clipped.sort_values(["window_ts", "symbol"]).reset_index(drop=True)
 
 

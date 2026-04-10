@@ -16,16 +16,16 @@ class SimBar(BaseModel):
 
 class SimBaseResponse(BaseModel):
     """
-    Full-day prediction for a symbol using the base model (trained through 2026-03-20).
+    Full-day prediction for a symbol using the base model (trained through effective_as_of_date).
 
     Uses step_00 predictions (1,157 base trees, no warm refresh) as the base view because
     the base bundle's predictions/ directory is empty.
     """
 
     symbol: str
-    date: str                        # "2026-03-23"
+    date: str                        # replay date, e.g. "2026-04-07"
     model_id: str                    # from base bundle metadata.json
-    effective_as_of_date: str        # "2026-03-20"
+    effective_as_of_date: str        # last date in base model training, e.g. "2026-04-06"
     bars: list[SimBar]               # 26 bars, h00–h25
     predicted_full_day_return: float  # % return at h25 vs anchor
     predicted_direction: str         # "up" | "down"
@@ -41,7 +41,7 @@ class SimStepResponse(BaseModel):
 
     symbol: str
     step: int                        # 0–25
-    as_of_ts: str                    # "2026-03-23 09:30:00"
+    as_of_ts: str                    # e.g. "2026-04-07 09:30:00"
     slot_label: str                  # "09:30"
     base_trees: int                  # always 1157
     warm_trees_added: int            # cumulative warm trees added so far
@@ -58,6 +58,7 @@ class SimSessionInfo(BaseModel):
     """
 
     replay_date: str
+    effective_as_of_date: str   # last date included in base model training (day before replay)
     steps_completed: int
     step_labels: list[str]   # ["09:30", "09:45", … "15:45"]
     warm_trees_per_step: int

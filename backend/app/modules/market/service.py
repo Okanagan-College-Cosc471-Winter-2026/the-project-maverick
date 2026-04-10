@@ -38,24 +38,20 @@ class MarketService:
         days: int = 365,
     ) -> list[OHLCRead]:
         """
-        Return daily OHLC data for the last *days* trading days.
+        Return 15-min OHLC bars for the last *days* calendar days.
 
-        Timestamps are returned as Unix seconds (UTC midnight)
-        which is what TradingView Lightweight Charts expects.
+        Timestamps are Unix seconds (UTC) matching the window_ts values in
+        ml.market_data_15m — consistent with what the simulation endpoints return.
         """
-        coverage = crud.get_coverage(session, symbol)
-        end = coverage["data_to"] or date.today()
-        start = end - timedelta(days=days)
-
-        rows = crud.get_daily_prices(session, symbol, start, end)
+        rows = crud.get_ohlc(session, symbol, days)
 
         return [
             OHLCRead(
-                time=int(calendar.timegm(r.date.timetuple())),
-                open=r.open,
-                high=r.high,
-                low=r.low,
-                close=r.close,
+                time=int(r.date.timestamp()),
+                open=float(r.open),
+                high=float(r.high),
+                low=float(r.low),
+                close=float(r.close),
                 volume=int(round(float(r.volume))),
             )
             for r in rows

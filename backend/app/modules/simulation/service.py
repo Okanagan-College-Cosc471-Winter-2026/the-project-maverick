@@ -42,7 +42,7 @@ class SimulationService:
     @staticmethod
     def base_predictions(symbol: str) -> SimBaseResponse:
         """
-        Return the base model view for a symbol on 2026-03-23.
+        Return the base model view for a symbol on the simulation replay date.
         Uses step_00 (1,157 base trees, no warm refresh) as the base view.
         """
         row = simulation_loader.get_base_row(symbol)

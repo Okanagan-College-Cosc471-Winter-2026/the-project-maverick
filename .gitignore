@@ -44,3 +44,4 @@ frontend/dist/
 # Misc
 .DS_Store
 *.log
+db_backup/*.dump
