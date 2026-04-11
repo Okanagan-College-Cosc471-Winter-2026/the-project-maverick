@@ -112,6 +112,7 @@ def ohlc_df(symbol: str, days: int) -> pd.DataFrame:
     if df.empty:
         return df
     df["date"] = pd.to_datetime(df["time"], unit="s", utc=True)
+    df["axis_label"] = df["date"].dt.strftime("%Y-%m-%d %H:%M")
     return df.sort_values("date").reset_index(drop=True)
 
 
@@ -127,7 +128,7 @@ def build_price_chart(df: pd.DataFrame, title: str, prediction: dict | None = No
 
     # Candlestick
     fig.add_trace(go.Candlestick(
-        x=hist["date"],
+        x=hist["axis_label"],
         open=hist["open"], high=hist["high"],
         low=hist["low"],   close=hist["close"],
         name="OHLC",
@@ -137,7 +138,7 @@ def build_price_chart(df: pd.DataFrame, title: str, prediction: dict | None = No
 
     # Volume bars on secondary Y axis
     fig.add_trace(go.Bar(
-        x=hist["date"], y=hist["volume"],
+        x=hist["axis_label"], y=hist["volume"],
         name="Volume", marker_color="#94a3b8",
         opacity=0.18, yaxis="y2",
     ))
@@ -146,7 +147,7 @@ def build_price_chart(df: pd.DataFrame, title: str, prediction: dict | None = No
     if prediction:
         path = prediction.get("path", [])
         if path and pred_date_str:
-            path_x = [f"{pred_date_str} {b['bar_time']}:00" for b in path]
+            path_x = [f"{pred_date_str} {b['bar_time']}" for b in path]
             path_y = [b["pred_close"] for b in path]
             fig.add_trace(go.Scatter(
                 x=path_x, y=path_y,
@@ -177,7 +178,6 @@ def build_price_chart(df: pd.DataFrame, title: str, prediction: dict | None = No
         showgrid=False,
         rangeslider_visible=False,
         type="category",
-        tickformat="%b %d %H:%M",
         nticks=20,
         tickangle=-45,
     )
@@ -204,7 +204,7 @@ def build_sim_chart(
     on_sim  = hist_df[hist_df["trade_date"] == replay_date]
     live_ohlc = ohlc_df if (ohlc_df is not None and not ohlc_df.empty) else None
     sim_df    = live_ohlc if live_ohlc is not None else on_sim
-    sim_dates = sim_df["date"].reset_index(drop=True)
+    sim_axis = sim_df["axis_label"].reset_index(drop=True)
     sim_close = sim_df["close"].reset_index(drop=True)
 
     fig = go.Figure()
@@ -212,7 +212,7 @@ def build_sim_chart(
     # Trace 1: Historical close (gray)
     if not pre_sim.empty:
         fig.add_trace(go.Scatter(
-            x=pre_sim["date"], y=pre_sim["close"],
+            x=pre_sim["axis_label"], y=pre_sim["close"],
             mode="lines", name="Historical Close (DB)",
             line={"color": "#64748b", "width": 2},
         ))
@@ -223,20 +223,20 @@ def build_sim_chart(
             obs  = sim_df.iloc[:current_step + 1]
             rest = sim_df.iloc[current_step + 1:]
             fig.add_trace(go.Scatter(
-                x=obs["date"], y=obs["close"],
+                x=obs["axis_label"], y=obs["close"],
                 mode="lines", name=f"Apr 7 observed (→ {step_label})",
                 line={"color": "#0ea5e9", "width": 2},
             ))
             if not rest.empty:
                 fig.add_trace(go.Scatter(
-                    x=rest["date"], y=rest["close"],
+                    x=rest["axis_label"], y=rest["close"],
                     mode="lines", name="Apr 7 actual (not yet seen)",
                     line={"color": "#38bdf8", "width": 2, "dash": "dashdot"},
                     opacity=0.6,
                 ))
         else:
             fig.add_trace(go.Scatter(
-                x=sim_df["date"], y=sim_df["close"],
+                x=sim_df["axis_label"], y=sim_df["close"],
                 mode="lines", name="Apr 7 actual (DB)",
                 line={"color": "#0ea5e9", "width": 2},
             ))
@@ -249,9 +249,9 @@ def build_sim_chart(
             if actual_at_step is not None:
                 base_log = bars[current_step]["pred_log_return"]
                 fwd_bars = bars[current_step:]
-                fwd_xs = [sim_dates.iloc[current_step + i]
+                fwd_xs = [sim_axis.iloc[current_step + i]
                           for i in range(len(fwd_bars))
-                          if current_step + i < len(sim_dates)]
+                          if current_step + i < len(sim_axis)]
                 fwd_ys = [
                     round(actual_at_step * math.exp(b["pred_log_return"] - base_log), 4)
                     for b in fwd_bars[:len(fwd_xs)]
@@ -264,7 +264,7 @@ def build_sim_chart(
                     marker={"size": 4, "color": "#f59e0b"},
                 ))
         elif anchor_close:
-            pred_xs = [sim_dates.iloc[i] for i in range(len(bars)) if i < len(sim_dates)]
+            pred_xs = [sim_axis.iloc[i] for i in range(len(bars)) if i < len(sim_axis)]
             pred_ys = [round(anchor_close * math.exp(b["pred_log_return"]), 4)
                        for b in bars[:len(pred_xs)]]
             fig.add_trace(go.Scatter(
@@ -286,7 +286,6 @@ def build_sim_chart(
         showgrid=False,
         rangeslider_visible=False,
         type="category",
-        tickformat="%b %d %H:%M",
         nticks=20,
         tickangle=-45,
     )
@@ -508,14 +507,8 @@ def render_predictions(stocks: list[dict], symbol: str) -> None:
         df = ohlc_df(symbol, 365)
         if not df.empty:
             st.markdown(f"#### {symbol} — Predicted Path")
-            price_df, vol_df = chart_data(df, prediction=payload)
-            cc1, cc2 = st.columns(2)
-            with cc1:
-                st.markdown("**Price**")
-                st.line_chart(price_df, height=CHART_H)
-            with cc2:
-                st.markdown("**Volume**")
-                st.bar_chart(vol_df, height=CHART_H)
+            fig = build_price_chart(df, f"{symbol} — Predicted Path", payload)
+            st.plotly_chart(fig, use_container_width=True)
         st.caption(f"26-bar 15-min path for {payload['prediction_date'][:10]}.")
 
 
@@ -533,6 +526,7 @@ def render_simulation(stocks: list[dict], symbol: str) -> None:
         hist_raw = load_sim_history(symbol)
         hist = pd.DataFrame(hist_raw)
         hist["date"] = pd.to_datetime(hist["time"], unit="s", utc=True)
+        hist["axis_label"] = hist["date"].dt.strftime("%Y-%m-%d %H:%M")
         hist = hist.sort_values("date").reset_index(drop=True)
     except ApiError as exc:
         st.error(f"Could not load history: {exc}")
@@ -554,6 +548,7 @@ def render_simulation(stocks: list[dict], symbol: str) -> None:
         ohlc = pd.DataFrame(ohlc_raw)
         if not ohlc.empty:
             ohlc["date"] = pd.to_datetime(ohlc["time"], unit="s", utc=True)
+            ohlc["axis_label"] = ohlc["date"].dt.strftime("%Y-%m-%d %H:%M")
             ohlc = ohlc.sort_values("date").reset_index(drop=True)
     except ApiError:
         ohlc = pd.DataFrame()

@@ -418,9 +418,23 @@ GPU & NVIDIA H100 (CUDA) \\
 \end{tabular}
 \end{table}
 
-The per-step training time is remarkably stable, ranging from 4.2~s (step~3) to 5.8~s (step~0), because the warm-refresh training window remains fixed at 1~day and only 30 trees are fitted per step. Inference time increases modestly from 0.59~s at step~0 to 1.34~s at step~25, reflecting the growing ensemble size.
+The per-step training time is remarkably stable, ranging from 4.2~s (step~3) to 5.8~s (step~0), because the warm-refresh training window remains fixed at 1~day and only 30 trees are fitted per step. Inference time increases modestly from 0.59~s at step~0 to 1.34~s at step~25, reflecting the growing ensemble size. Fig.~\ref{fig:ensemble_growth} shows both the ensemble growth curve and the per-step timing.
 
-The entire 26-step simulation, covering the full regular session for 504~equities, completes in approximately 554~seconds of wall time (including 380~s of one-time feature construction). The per-step latency of under 7~seconds per step is well within the 15-minute bar interval, confirming that the warm-refresh approach is operationally feasible for real-time deployment.
+The entire 26-step simulation, covering the full regular session for 504~equities, completes in approximately 554~seconds of wall time (including 380~s of one-time feature construction). The per-step latency of under 7~seconds per step is well within the 15-minute bar interval, confirming that the warm-refresh approach is operationally feasible for real-time deployment. Fig.~\ref{fig:step_latency} breaks down the train and inference components at each step.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{images/ensemble_growth_timing.png}
+    \caption{Ensemble size (left axis) and per-step training time (right axis) across the 26 warm-refresh steps on 2026-04-07. The ensemble grows linearly from 430 to 1{,}180~trees while training time remains stable at approximately 5~seconds per step.}
+    \label{fig:ensemble_growth}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{images/step_latency.png}
+    \caption{Per-step warm-refresh latency decomposed into training and inference time. All 26~steps complete in under 7~seconds, well within the 15-minute bar interval.}
+    \label{fig:step_latency}
+\end{figure}
 
 \subsection{Prediction Analysis Across Steps}
 
@@ -441,9 +455,23 @@ Table~\ref{tab:steppredictions} shows how the model's aggregate predictions evol
 \end{tabular}
 \end{table}
 
-At market open (step~0), the model's directional split is relatively balanced (45\% up, 55\% down). As the day progresses, the proportion of bearish forecasts increases to 63\% by session close, and the mean predicted return shifts from approximately neutral to $-$0.19\%. This demonstrates that the warm-refreshed ensemble actively adapts its view as new intraday information is incorporated.
+At market open (step~0), the model's directional split is relatively balanced (45\% up, 55\% down). As the day progresses, the proportion of bearish forecasts increases to 63\% by session close, and the mean predicted return shifts from approximately neutral to $-$0.19\%. This demonstrates that the warm-refreshed ensemble actively adapts its view as new intraday information is incorporated (Fig.~\ref{fig:directional_shift}).
 
-The prediction range also widens from $\pm$3.7\% at step~0 to [$-$4.3\%, +8.5\%] at later steps, reflecting increased model confidence for individual names once more of the intraday pattern has been observed.
+The prediction range also widens from $\pm$3.7\% at step~0 to [$-$4.3\%, +8.5\%] at later steps, reflecting increased model confidence for individual names once more of the intraday pattern has been observed. Fig.~\ref{fig:return_heatmap} shows how individual stock forecasts evolve across the session for the most active names.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{images/directional_shift.png}
+    \caption{Directional forecast distribution across the 26 simulation steps. The proportion of bearish forecasts increases from 55\% at market open to 63\% by session close, demonstrating that the warm-refreshed ensemble adapts its view as new intraday data arrives.}
+    \label{fig:directional_shift}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{images/return_heatmap.png}
+    \caption{Predicted full-day return by symbol and simulation step for the 15~names with the largest absolute forecasts at step~25. The heatmap shows how individual forecasts develop as the warm-refreshed ensemble incorporates each new 15-minute bar.}
+    \label{fig:return_heatmap}
+\end{figure}
 
 % ============================================================
 %  SECTION VIII --- DISCUSSION
@@ -470,7 +498,7 @@ Several limitations remain. First, the current production model is trained witho
 \begin{figure}[t]
     \centering
     \includegraphics[width=\columnwidth]{images/feature_importance_top25.png}
-    \caption{Top 25 features by mean gain for the XGBoost configuration. Cutoff-aware and rolling volatility features dominate the learned signal.}
+    \caption{Top 25 features by mean gain across all 26 horizon models at step~25 (1{,}180~trees). Cutoff-aware session-state and rolling volatility features dominate the learned signal.}
     \label{fig:feature_importance}
 \end{figure}
 
