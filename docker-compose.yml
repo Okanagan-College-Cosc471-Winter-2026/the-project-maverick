@@ -65,6 +65,9 @@ services:
     volumes:
       - ./datasets:/data/datasets
       - ./model_artifacts:/model_artifacts:ro
+      - /data/projects/Algo-trade-monorepo/logs:/data/pipeline_logs:ro
+      - /home/ubuntu/.ssh/nibi_key:/root/.ssh/nibi_key:ro
+      - /home/ubuntu/.ssh/cm:/root/.ssh/cm:ro
     depends_on:
       db:
         condition: service_healthy
@@ -83,6 +86,11 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER?Variable not set}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+      - PIPELINE_LOGS_DIR=/data/pipeline_logs
+      - MODEL_ARTIFACTS_DIR=/model_artifacts
+      - NIBI_USER=${NIBI_USER:-harshsaw}
+      - NIBI_HOST=${NIBI_HOST:-nibi.sharcnet.ca}
+      - NIBI_SSH_KEY=/root/.ssh/nibi_key
 
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/" ]
@@ -100,9 +108,101 @@ services:
       - "8501:8501"
     environment:
       - API_BASE_URL=http://backend:8000/api/v1
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_ENABLE_CORS=false
+      - STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false
     depends_on:
       - backend
 
 
+  # ── Airflow init — runs db migrate + creates admin user, then exits ──────────
+  airflow-init:
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
+    image: maverick-airflow
+    depends_on:
+      db: {condition: service_healthy}
+    env_file: .env
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
+    command: bash -c "airflow db migrate && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com || true"
+
+  # ── Airflow webserver — UI on :8081 ──────────────────────────────────────
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
+    image: maverick-airflow
+    restart: always
+    ports:
+      - "8081:8080"
+    group_add:
+      - "1000"   # ubuntu GID — allows access to the SSH ControlMaster socket (mode 660)
+    depends_on:
+      db: {condition: service_healthy}
+      airflow-init: {condition: service_completed_successfully}
+    env_file: .env
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+    volumes:
+      - /data/projects/Algo-trade-monorepo/airflow/airflow/dags:/opt/airflow/dags/algo_trade:ro
+      - airflow-logs:/opt/airflow/logs
+      - /data/projects/Algo-trade-monorepo:/data/projects/Algo-trade-monorepo
+      - /data/projects/the-project-maverick/model_artifacts:/data/projects/the-project-maverick/model_artifacts:ro
+      - /home/ubuntu/.ssh/nibi_key:/home/airflow/.ssh/nibi_key:ro
+      - /home/ubuntu/.ssh/cm:/home/airflow/.ssh/cm
+    command: webserver
+
+  # ── Airflow scheduler — picks up and runs DAG tasks ──────────────────────
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
+    image: maverick-airflow
+    restart: always
+    group_add:
+      - "1000"   # ubuntu GID — allows access to the SSH ControlMaster socket (mode 660)
+    depends_on:
+      db: {condition: service_healthy}
+      airflow-init: {condition: service_completed_successfully}
+    env_file: .env
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - OLD_DB_HOST=db
+      - OLD_DB_PORT=5432
+      - OLD_DB_NAME=${POSTGRES_DB}
+      - OLD_DB_USER=${POSTGRES_USER}
+      - OLD_DB_PASSWORD=${POSTGRES_PASSWORD}
+      - NIBI_USER=harshsaw
+      - NIBI_HOST=nibi.sharcnet.ca
+      - NIBI_SSH_KEY=/home/airflow/.ssh/nibi_key
+      - NIBI_SOCKET_DIR=/home/airflow/.ssh/cm
+      - BACKEND_URL=http://backend:8000
+    volumes:
+      - /data/projects/Algo-trade-monorepo/airflow/airflow/dags:/opt/airflow/dags/algo_trade:ro
+      - airflow-logs:/opt/airflow/logs
+      - /data/projects/Algo-trade-monorepo:/data/projects/Algo-trade-monorepo
+      - /data/projects/the-project-maverick/model_artifacts:/data/projects/the-project-maverick/model_artifacts:ro
+      - /home/ubuntu/.ssh/nibi_key:/home/airflow/.ssh/nibi_key:ro
+      - /home/ubuntu/.ssh/cm:/home/airflow/.ssh/cm
+    command: scheduler
+
+
 volumes:
   app-db-data:
+  airflow-logs:

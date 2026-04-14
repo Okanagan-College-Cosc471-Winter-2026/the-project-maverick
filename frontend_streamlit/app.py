@@ -12,6 +12,7 @@ from api import (
     build_snapshot,
     download_snapshot,
     get_ohlc,
+    get_pipeline_status,
     health_check,
     list_snapshots,
     list_stocks,
@@ -513,6 +514,10 @@ def render_predictions(stocks: list[dict], symbol: str) -> None:
 
 
 def render_simulation(stocks: list[dict], symbol: str) -> None:
+    if not symbol:
+        st.info("Simulation prediction CSVs are not available on this server. The model artifacts were generated on a remote HPC cluster and the prediction files were not committed to the repository.")
+        return
+
     try:
         session_info = load_sim_session()
     except ApiError as exc:
@@ -621,6 +626,122 @@ def render_snapshots() -> None:
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 
+def render_pipeline() -> None:
+    st.subheader("Pipeline")
+
+    try:
+        status = get_pipeline_status()
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"Could not reach ops endpoint: {exc}")
+        st.caption("Backend needs to be rebuilt with the ops module.")
+        return
+
+    # ── Row 1: Status badges ──────────────────────────────────────────────────
+    ssh   = status.get("ssh_status", "unknown")
+    job   = status.get("current_job") or {}
+    model = status.get("active_model") or {}
+
+    ssh_color   = "green" if ssh == "ok" else ("orange" if ssh == "no_key" else "red")
+    ssh_label   = {"ok": "NIBI Reachable", "unreachable": "NIBI Unreachable", "no_key": "No SSH Key"}.get(ssh, ssh)
+    job_status  = job.get("status", "idle").upper()
+    job_color   = {"SUBMITTED": "blue", "COMPLETED": "green", "FAILED": "red"}.get(job_status, "gray")
+    model_label = model.get("bundle", "none")
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.markdown(f"**SSH** &nbsp; :{ssh_color}[{ssh_label}]", unsafe_allow_html=False)
+    c2.markdown(f"**Job** &nbsp; :{job_color}[{job_status}]")
+    c3.markdown(f"**Active model** &nbsp; `{model_label}`")
+    c4.caption(f"Fetched {status.get('fetched_at','')[:19]} UTC")
+
+    st.divider()
+
+    # ── Row 2: Current job card + active model card ───────────────────────────
+    left, right = st.columns(2)
+
+    with left:
+        st.markdown("#### Current Job")
+        if not job:
+            st.info("No job record found.")
+        else:
+            j1, j2 = st.columns(2)
+            j1.metric("Job ID",    job.get("job_id", "—"))
+            j2.metric("Sim date",  job.get("sim_date", "—"))
+            j3, j4 = st.columns(2)
+            j3.metric("Status",    job.get("status", "—").title())
+            j4.metric("Elapsed",   job.get("elapsed", "—") or "—")
+            if job.get("submitted_at"):
+                st.caption(f"Submitted: {job['submitted_at'][:19]} UTC")
+            if job.get("completed_at"):
+                st.caption(f"Completed: {job['completed_at'][:19]} UTC")
+
+    with right:
+        st.markdown("#### Active Model")
+        if model.get("status") == "no_model":
+            st.warning("No model promoted yet.")
+        else:
+            m1, m2 = st.columns(2)
+            m1.metric("Bundle",     model.get("bundle", "—"))
+            m2.metric("Train cutoff", model.get("train_end_date", "—") or "—")
+            m3, m4 = st.columns(2)
+            m3.metric("Trees",      str(model.get("n_estimators", "—")))
+            m4.metric("Promoted",   (model.get("promoted_at") or "—")[:10])
+
+    st.divider()
+
+    # ── Row 3: Usage history ──────────────────────────────────────────────────
+    usage = status.get("usage_history", [])
+    st.markdown("#### GPU Usage History")
+    if not usage:
+        st.info("No usage records yet. Records will appear after the first DAG run completes.")
+    else:
+        import pandas as pd
+
+        # Build a clean DataFrame
+        rows = []
+        for rec in usage:
+            rows.append({
+                "Date":        (rec.get("sim_date") or rec.get("submitted_at", "")[:10]),
+                "Job ID":      rec.get("job_id", "—"),
+                "Event":       rec.get("event", "—"),
+                "GPU Hours":   rec.get("gpu_hours"),
+                "GPU Type":    rec.get("gpu_type", "—").upper(),
+                "Submitted":   (rec.get("submitted_at") or "")[:19],
+                "Completed":   (rec.get("completed_at") or "")[:19],
+            })
+        df_usage = pd.DataFrame(rows)
+
+        # Summary metric
+        completed = df_usage[df_usage["Event"] == "completed"]
+        total_gpu_h = completed["GPU Hours"].dropna().sum()
+        col_a, col_b, col_c = st.columns(3)
+        col_a.metric("Total Runs",      len(df_usage[df_usage["Event"] == "submitted"]))
+        col_b.metric("Completed",        len(completed))
+        col_c.metric("Total H100-hours", f"{total_gpu_h:.2f}" if total_gpu_h else "0")
+
+        # Bar chart of GPU hours per run
+        if not completed.empty and completed["GPU Hours"].notna().any():
+            chart_df = completed[["Date", "GPU Hours"]].dropna().set_index("Date")
+            st.bar_chart(chart_df, height=220)
+
+        # Full table
+        st.dataframe(
+            df_usage,
+            use_container_width=True,
+            hide_index=True,
+            height=min(300, 40 + 35 * len(df_usage)),
+            column_config={
+                "GPU Hours": st.column_config.NumberColumn("GPU Hours", format="%.3f"),
+            },
+        )
+
+    st.divider()
+
+    # ── Row 4: Refresh ────────────────────────────────────────────────────────
+    if st.button("Refresh", type="secondary"):
+        st.cache_data.clear()
+        st.rerun()
+
+
 def build_sidebar(stocks: list[dict]) -> tuple[str, str, int, str]:
     with st.sidebar:
         st.markdown(
@@ -639,7 +760,7 @@ def build_sidebar(stocks: list[dict]) -> tuple[str, str, int, str]:
         )
 
         page = st.radio(
-            "Navigation", ["Overview","Stocks","Predictions","Simulation","Snapshots"],
+            "Navigation", ["Overview","Stocks","Predictions","Simulation","Snapshots","Pipeline"],
             label_visibility="collapsed",
         )
         st.divider()
@@ -729,6 +850,8 @@ def main() -> None:
         render_predictions(stocks, symbol)
     elif page == "Simulation":
         render_simulation(stocks, symbol)
+    elif page == "Pipeline":
+        render_pipeline()
     else:
         render_snapshots()
 

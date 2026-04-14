@@ -1,146 +1,269 @@
-# The Project Maverick
+# Project Maverick
 
-Market prediction platform built around a Postgres feature store, a FastAPI backend, trained model artifacts, and a Streamlit frontend.
+An end-to-end algorithmic trading intelligence platform: intraday market data → feature store → XGBoost training on HPC → live inference and simulation replay, served through a FastAPI backend and Streamlit dashboard.
 
-## Documentation Index
+**Demo:** [Loom walkthrough](https://www.loom.com/share/07f7584445dd41d389e720bd053ae7ea)
 
-- [ML and simulation docs](./ml/README.md)
-- [April 7 replay workstream](./ml/SIMULATION_APRIL7.md)
-- [Current database inventory](./Documentation/Current_Database_Inventory.md)
-- [Project documentation set](./Documentation/)
+---
 
-## Demo
+## Architecture
 
-- Demo walkthrough: `https://www.loom.com/share/07f7584445dd41d389e720bd053ae7ea`
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        LOCAL DOCKER STACK                           │
+│                                                                     │
+│  ┌──────────┐    ┌──────────┐    ┌──────────────────────────────┐  │
+│  │Streamlit │───▶│ FastAPI  │───▶│        PostgreSQL 16         │  │
+│  │:8501     │    │ Backend  │    │                              │  │
+│  └──────────┘    │ :8000    │    │  ml.market_data_15m          │  │
+│                  └──────────┘    │  ml.macro_indicator_daily    │  │
+│  ┌──────────┐         │          └──────────────────────────────┘  │
+│  │ Airflow  │         │ model_artifacts/                           │
+│  │Scheduler │         │  current_base/                             │
+│  │:8081     │         │  current_simulation/                       │
+│  └────┬─────┘         └──────────────────────────────────────────  │
+│       │                                                             │
+└───────┼─────────────────────────────────────────────────────────────┘
+        │ SSH (ControlMaster socket, Duo MFA)
+        ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                   NIBI HPC (Alliance Canada / SHARCNET)             │
+│                                                                     │
+│   Slurm GPU queue (gpubase_b, H100)                                 │
+│   ├── simulate_full_day.sbatch                                      │
+│   │     • base model training  (XGBoost, 500+ symbols)             │
+│   │     • warm simulation      (25 × 15-min prediction horizons)   │
+│   └── artifacts rsync'd back → model_artifacts/                    │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-## What Lives Where
+### Data Flow
 
-### Top-level folders
+```
+FMP API (intraday)
+      │
+      ▼
+ml/scripts/fetch_new_date.py          ← manual one-off fetch
+ml/scripts/backfill_market_data_15m_from_fmp.py  ← bulk/resume backfill
+      │
+      ▼  upsert + feature engineering
+ml.market_data_15m  (PostgreSQL)
+  • OHLCV bars (15-min, regular session)
+  • lag features, SMAs, volatility, momentum
+      │
+      ├──▶ export_parquet ──▶ rsync to NIBI ──▶ XGBoost training
+      │                                               │
+      │                                        model artifacts
+      │                                               │
+      │                                        rsync back ──▶ model_artifacts/
+      │                                                              │
+      └──▶ FastAPI inference/simulation endpoints ◀─────────────────┘
+                      │
+                      ▼
+              Streamlit dashboard
+```
 
-- `backend/` FastAPI application, API modules, tests, and backend scripts
-- `frontend_streamlit/` active Streamlit UI and API client
-- `ml/` training code, feature engineering, data scripts, and ML documentation
-- `model_artifacts/` saved model bundles and replay outputs used by inference and simulation
-- `docker/` container build files for backend, Streamlit, and supporting services
-- `Documentation/` course and project documentation set
-- `tests/` repo-level test suites outside the backend package
-- `scripts/` utility scripts used at the repo level
-- `airflow/` orchestration-related configs, dags, and plugins
-- `datasets/` local dataset assets
+---
 
-### Key files
+## Services
 
-- `docker-compose.yml` main local stack definition
-- `backend/app/main.py` FastAPI app entrypoint
-- `frontend_streamlit/app.py` Streamlit app entrypoint
-- `frontend_streamlit/api.py` Streamlit-to-backend client layer
-- `ml/notebooks/XG_boost_3.py` main XGBoost training, prediction, and replay pipeline
-- `ml/scripts/refetch_market_data_15m_quality.py` bulk intraday backfill and quality workflow
-- `backend/app/modules/inference/service.py` live inference service logic
-- `backend/app/modules/simulation/loader.py` replay artifact loader for the simulation API
-- `backend/app/modules/simulation/service.py` simulation response builder
-- `ml/README.md` ML docs index
-- `ml/SIMULATION_APRIL7.md` April 7 replay note and demo context
-- `Documentation/Current_Database_Inventory.md` current DB snapshot, active schemas, and key table schema reference
+| Service | Port | Description |
+|---------|------|-------------|
+| `db` | 5432 | PostgreSQL 16 — feature store and app DB |
+| `backend` | 8000 | FastAPI — inference, simulation, market data, ops |
+| `streamlit` | 8501 | Streamlit — dashboard UI |
+| `airflow-webserver` | 8081 | Airflow UI |
+| `airflow-scheduler` | — | DAG scheduler (LocalExecutor) |
+| `adminer` | 8082 | DB admin UI |
+| `prestart` | — | One-shot: Alembic migrations + seed data |
 
-## Current Stack
+---
 
-- Data layer: PostgreSQL
-- Backend: FastAPI
-- ML: XGBoost + pandas/scikit-learn tooling
-- Frontend: Streamlit in `frontend_streamlit/`
-- Artifacts: saved model bundles used for inference and simulation
+## Repository Layout
 
-## What The System Does
+```
+the-project-maverick/
+├── backend/
+│   └── app/
+│       ├── modules/
+│       │   ├── market/        # stock list, OHLCV endpoints
+│       │   ├── inference/     # live prediction endpoints + model loader
+│       │   ├── simulation/    # replay/backtest endpoints
+│       │   ├── training/      # training job status
+│       │   ├── data/          # snapshot export
+│       │   └── ops/           # pipeline status, SSH health, usage meter
+│       ├── core/              # config, DB engine, auth
+│       └── alembic/           # DB migrations
+│
+├── frontend_streamlit/
+│   ├── app.py                 # Streamlit entrypoint (all pages)
+│   └── api.py                 # typed client for backend API
+│
+├── ml/
+│   ├── XG_boost_3_multigpu_final.py   # main training + simulation script
+│   ├── scripts/
+│   │   ├── backfill_market_data_15m_from_fmp.py   # bulk backfill (resumable)
+│   │   ├── fetch_new_date.py                       # fetch a single new trading date
+│   │   ├── refetch_market_data_15m_quality.py      # quality-focused re-fetch
+│   │   └── init-db.sh                              # DB init script
+│   └── nibi/
+│       └── simulate_full_day.sbatch   # Slurm GPU job definition
+│
+├── airflow/
+│   └── dags/                  # local Maverick DAGs (snapshots, retraining)
+│
+├── docker/
+│   ├── backend/Dockerfile
+│   ├── streamlit/Dockerfile
+│   └── airflow/Dockerfile     # apache/airflow:2.9.3 + openssh + pip deps
+│
+├── model_artifacts/
+│   ├── base_YYYY-MM-DD/       # XGBoost base model bundle
+│   ├── simulation_YYYY-MM-DD/ # per-horizon simulation models (25+ steps)
+│   ├── current_base -> ...    # symlink to active base model
+│   └── current_simulation ->  # symlink to active simulation models
+│
+├── Documentation/             # project docs, DB inventory, user manual
+├── docker-compose.yml
+├── deployment.md
+└── development.md
+```
 
-1. Collects and stores historical market data.
-2. Computes engineered features used by the ML pipeline.
-3. Trains base models and stores model artifacts.
-4. Loads saved artifacts for inference and replay/simulation.
-5. Displays predictions, charts, and side-by-side comparisons in Streamlit.
+---
 
-## Main Data Tables
+## Training Pipeline (Airflow DAG: `nibi_daily_warm_refresh`)
 
-- `ml.market_data_15m`
-  Regular-session 15-minute OHLCV bars plus engineered feature columns.
-- `ml.macro_indicator_daily`
-  Daily macro inputs such as Treasury series when loaded.
+The main pipeline lives in the **Algo-trade-monorepo** Airflow DAGs folder and is mounted into the Airflow containers. It runs Mon–Fri at 10:00 UTC.
 
-The `ml.market_data_15m` table is the core training and inference feature store.
+```
+ssh_health_check
+      │
+      ├── check_nibi_libraries   (parallel)
+      ├── sync_code_to_nibi      (parallel)
+      ├── export_parquet         (parallel)
+      └── sync_base_model        (parallel)
+                    │
+            sync_parquet_to_nibi
+                    │
+            clean_nibi_run_root
+                    │
+            submit_slurm_job          ← sbatch on NIBI H100
+                    │
+            poll_job_until_done       ← NibiJobSensor (reschedule mode)
+                    │
+            validate_artifacts
+                    │
+            rsync_artifacts_back
+                    │
+            promote_model             ← updates current_base / current_simulation symlinks
+                    │
+            reload_backend            ← POST /api/v1/inference/reload
+```
 
-## Backend Responsibilities
+**Runtime Airflow Variables:**
 
-The backend is responsible for:
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `nibi_skip_base` | `false` | Skip base model training; use existing |
+| `nibi_base_model_dir` | `current_base` | Override base model path to sync |
 
-- market data access
-- engineered feature preparation
-- training job status endpoints
-- inference endpoints
-- simulation/replay endpoints
-- snapshot and export endpoints
+---
 
-Relevant backend areas:
+## NIBI HPC Access
 
-- `backend/app/modules/market`
-- `backend/app/modules/inference`
-- `backend/app/modules/training`
-- `backend/app/modules/simulation`
-- `backend/app/modules/data`
+SSH uses a **ControlMaster socket** to reuse a single Duo-authenticated session across all pipeline tasks. The socket lives at `~/.ssh/cm/nibi-harshsaw@nibi.sharcnet.ca:22`.
 
-## Frontend Responsibilities
-
-The active frontend is Streamlit:
-
-- `frontend_streamlit/app.py`
-- `frontend_streamlit/api.py`
-
-It provides:
-
-- stock browsing
-- OHLC chart views
-- prediction overlays
-- simulation playback
-- training/snapshot workflow views
-
-## Local URLs
-
-When the local stack is running:
-
-- Streamlit: `http://localhost:8501`
-- Backend API: `http://localhost:8000`
-- Swagger docs: `http://localhost:8000/docs`
-- Adminer: `http://localhost:8082`
-
-## Docker
-
-Start the local stack:
+Before triggering a DAG run, ensure the socket is active:
 
 ```bash
+ssh -M -o "ControlPath=~/.ssh/cm/nibi-harshsaw@nibi.sharcnet.ca:22" \
+    -o "ControlPersist=8h" \
+    -i ~/.ssh/nibi_key \
+    harshsaw@nibi.sharcnet.ca
+
+# Verify it works:
+ssh -o "ControlPath=~/.ssh/cm/nibi-harshsaw@nibi.sharcnet.ca:22" \
+    -o "ControlMaster=no" -o "BatchMode=yes" \
+    -i ~/.ssh/nibi_key harshsaw@nibi.sharcnet.ca "echo ok"
+```
+
+The Airflow containers run as **uid 1000** (matching the host `ubuntu` user) so they can connect to the ControlMaster socket via `SO_PEERCRED`.
+
+A cron job keeps permissions correct:
+
+```
+*/1 * * * * chmod 660 /home/ubuntu/.ssh/cm/nibi-* 2>/dev/null || true
+```
+
+---
+
+## Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Database | PostgreSQL 16 |
+| Backend | FastAPI, SQLModel, Alembic, psycopg |
+| ML | XGBoost ≥ 2.0, pandas ≥ 2.0, scikit-learn ≥ 1.4 |
+| Frontend | Streamlit |
+| Orchestration | Apache Airflow 2.9.3 (LocalExecutor) |
+| HPC | Slurm + H100 GPU (Alliance Canada / NIBI) |
+| Market Data | FMP (Financial Modeling Prep) API |
+| Containers | Docker Compose |
+
+---
+
+## Quick Start
+
+```bash
+# 1. Copy and fill environment variables
+cp .env.example .env
+
+# 2. Start the full stack
 docker compose up -d --build
+
+# 3. Open the dashboard
+open http://localhost:8501
+
+# Airflow UI
+open http://localhost:8081   # admin / admin
+
+# Swagger docs
+open http://localhost:8000/docs
 ```
 
-The compose stack includes:
-
-- `db`
-- `adminer`
-- `prestart`
-- `backend`
-- `streamlit`
-
-The old React frontend has been removed from the active Docker stack.
-
-## Streamlit Local Development
-
-Run Streamlit without Docker:
+### Load historical market data
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r frontend_streamlit/requirements.txt
-API_BASE_URL=http://localhost:8000/api/v1 streamlit run frontend_streamlit/app.py
+# Fetch a specific date (e.g. when adding a new trading day)
+python ml/scripts/fetch_new_date.py --date 2026-04-08
+
+# Bulk backfill (resumable)
+python ml/scripts/backfill_market_data_15m_from_fmp.py
 ```
 
-## Backend Local Development
+### Trigger a training run manually
+
+```bash
+# Ensure NIBI ControlMaster socket is active first (see above)
+docker compose exec airflow-scheduler \
+  airflow dags trigger nibi_daily_warm_refresh \
+  --conf '{"trade_date": "2026-04-08"}'
+```
+
+---
+
+## Key Data Tables
+
+| Table | Description |
+|-------|-------------|
+| `ml.market_data_15m` | Core feature store: 15-min OHLCV bars + engineered features (lags, SMAs, volatility, momentum) for 500+ symbols |
+| `ml.macro_indicator_daily` | Daily macro inputs (Treasury series, etc.) |
+
+---
+
+## Local Development
+
+**Backend:**
 
 ```bash
 cd backend
@@ -149,24 +272,20 @@ uv run alembic upgrade head
 uv run fastapi dev app/main.py --host 0.0.0.0 --port 8000
 ```
 
-## Data Loading
+**Streamlit:**
 
-The market data loaders live under `ml/scripts/`.
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r frontend_streamlit/requirements.txt
+API_BASE_URL=http://localhost:8000/api/v1 streamlit run frontend_streamlit/app.py
+```
 
-Important scripts:
+---
 
-- `ml/scripts/refetch_market_data_15m_quality.py`
-- `ml/scripts/backfill_market_data_15m_from_fmp.py`
-- `ml/scripts/fetch_raw_market_vendor_dataset.py`
+## Further Reading
 
-The current bulk-loading workflow uses a resumable `simple-fmp` mode that:
-
-- fetches FMP intraday data in larger chunks
-- writes each symbol directly to Postgres
-- recomputes features per committed symbol
-- stores progress in `ml/data/quality_refetch_reports/simple_fmp_checkpoint.json`
-
-## Notes
-
-- Historical course/project documents in `Documentation/` may describe earlier implementation phases.
-- The active runtime stack is Postgres + FastAPI + Streamlit.
+- [`ml/README.md`](./ml/README.md) — ML pipeline details and mermaid flowchart
+- [`ml/SIMULATION_APRIL7.md`](./ml/SIMULATION_APRIL7.md) — April 7 replay workstream notes
+- [`Documentation/Current_Database_Inventory.md`](./Documentation/Current_Database_Inventory.md) — DB schema reference
+- [`deployment.md`](./deployment.md) — Production deployment (Traefik, CI/CD)
+- [`development.md`](./development.md) — Extended local dev guide

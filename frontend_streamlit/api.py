@@ -106,3 +106,20 @@ def sim_ohlc(symbol: str) -> list[dict[str, Any]]:
     return _request("GET", f"/simulation/ohlc/{symbol.upper()}")
 
 
+# ---------------------------------------------------------------------------
+# Pipeline / ops endpoints
+# ---------------------------------------------------------------------------
+
+def get_pipeline_status() -> dict[str, Any]:
+    """
+    Full pipeline status snapshot:
+      ssh_status, current_job, usage_history, active_model, fetched_at
+    """
+    return _request("GET", "/ops/pipeline/status")
+
+
+def get_pipeline_usage() -> list[dict[str, Any]]:
+    """Full usage meter history (all runs, newest first)."""
+    return _request("GET", "/ops/pipeline/usage")
+
+
